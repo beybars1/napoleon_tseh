@@ -65,4 +65,8 @@ setup-dev: install
 
 # Create admin user
 create-admin:
-	python -c "from app.scripts.create_admin import create_admin_user; create_admin_user()" 
+	python app/scripts/create_admin.py
+
+# Create default admin user
+create-default-admin:
+	python app/scripts/create_admin.py --default 

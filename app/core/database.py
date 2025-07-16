@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import create_engine
+from typing import AsyncGenerator
 import structlog
 
 from app.core.config import settings
@@ -56,7 +57,7 @@ async def init_db():
         raise
 
 
-async def get_async_session() -> AsyncSession:
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Get async database session"""
     async with AsyncSessionLocal() as session:
         try:

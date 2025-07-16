@@ -36,7 +36,7 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
-    logger.info("Starting Cake CRM application")
+    logger.info("Starting Napoleon-Tseh CRM application")
     
     # Initialize database
     await init_db()
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="AI-Enabled CRM System for Cake Pastry Business",
+    description="AI-Enabled Napoleon-Tseh CRM System",
     lifespan=lifespan
 )
 

@@ -6,6 +6,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
+from pydantic import BaseModel
 
 from app.core.database import get_async_session
 from app.core.config import settings
@@ -67,10 +68,20 @@ async def get_current_user(
     return user
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
+
+
 @router.post("/login")
 async def login(
-    username: str,
-    password: str,
+    login_request: LoginRequest,
     db: AsyncSession = Depends(get_async_session)
 ):
     """Login endpoint"""
@@ -78,12 +89,12 @@ async def login(
     # Get user by username or email
     result = await db.execute(
         select(User).where(
-            (User.username == username) | (User.email == username)
+            (User.username == login_request.username) | (User.email == login_request.username)
         )
     )
     user = result.scalar_one_or_none()
     
-    if not user or not verify_password(password, user.hashed_password):
+    if not user or not verify_password(login_request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -106,17 +117,17 @@ async def login(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
+    return AuthResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user={
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role.value
         }
-    }
+    )
 
 
 @router.get("/me")

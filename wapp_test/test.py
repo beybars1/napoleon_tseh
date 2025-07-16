@@ -13,7 +13,7 @@ from whatsapp_api_client_python import GreenAPI
 
 # Configuration
 INSTANCE_ID = "7105242930"  # Replace with your Green API Instance ID
-API_TOKEN = "6e6a238888e0439490087474fbcf53dfa378df90300d4793a3"      # Replace with your Green API Token
+API_TOKEN = ""      # Replace with your Green API Token
 
 def connect_to_green_api():
     """Initialize and return the Green API client"""

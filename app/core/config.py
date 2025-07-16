@@ -6,14 +6,13 @@ import os
 
 class Settings(BaseSettings):
     """Application settings"""
-    
-    # Database
+    # Database URL
     DATABASE_URL: str = Field(..., env="DATABASE_URL")
     DATABASE_URL_SYNC: str = Field(..., env="DATABASE_URL_SYNC")
     
-    # Redis
-    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
-    
+    # Redis URL
+    REDIS_URL: str = Field(..., env="REDIS_URL")
+        
     # JWT
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field(default="HS256", env="ALGORITHM")
@@ -59,15 +58,28 @@ class Settings(BaseSettings):
     APP_VERSION: str = Field(default="1.0.0", env="APP_VERSION")
     DEBUG: bool = Field(default=True, env="DEBUG")
     CORS_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8080"],
+        default=["http://localhost:3000", "http://localhost:8000"],
         env="CORS_ORIGINS"
     )
     
     # Business
-    BUSINESS_NAME: str = Field(default="Your Cake Shop", env="BUSINESS_NAME")
+    BUSINESS_NAME: str = Field(default="Napoleon-Tseh", env="BUSINESS_NAME")
     BUSINESS_PHONE: str = Field(..., env="BUSINESS_PHONE")
     BUSINESS_EMAIL: str = Field(..., env="BUSINESS_EMAIL")
     BUSINESS_ADDRESS: str = Field(..., env="BUSINESS_ADDRESS")
+    
+    # Host OS Ports
+    APP_HOST_PORT: int = Field(default=8000, env="APP_HOST_PORT")
+    DB_HOST_PORT: int = Field(default=5432, env="DB_HOST_PORT")
+    REDIS_HOST_PORT: int = Field(default=6379, env="REDIS_HOST_PORT")
+    REDIS_COMMANDER_PORT: int = Field(default=8081, env="REDIS_COMMANDER_PORT")
+    PGADMIN_PORT: int = Field(default=5050, env="PGADMIN_PORT")
+
+    # Database
+    POSTGRES_USER: str = Field(..., env="POSTGRES_USER")
+    POSTGRES_PASSWORD: str = Field(..., env="POSTGRES_PASSWORD")
+    POSTGRES_DB: str = Field(..., env="POSTGRES_DB")
+
     
     class Config:
         env_file = ".env"

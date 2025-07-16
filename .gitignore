@@ -158,6 +158,82 @@ cython_debug/
 #  project, it is recommended to add the following line to your .gitignore:
 .idea/
 
+# ===== FRONTEND SPECIFIC IGNORES =====
+
+# Node.js dependencies
+frontend/node_modules/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/lerna-debug.log*
+frontend/.pnpm-debug.log*
+
+# Build outputs
+frontend/build/
+frontend/dist/
+frontend/out/
+
+# React/TypeScript build artifacts
+frontend/.next/
+frontend/.nuxt/
+frontend/.vuepress/dist/
+frontend/.cache/
+frontend/.parcel-cache/
+
+# TypeScript cache
+frontend/*.tsbuildinfo
+frontend/.tsbuildinfo
+
+# ESLint cache
+frontend/.eslintcache
+
+# Stylelint cache
+frontend/.stylelintcache
+
+# Test coverage
+frontend/coverage/
+frontend/.nyc_output/
+frontend/*.lcov
+
+# Storybook build outputs
+frontend/storybook-static/
+
+# Vite build cache
+frontend/.vite/
+
+# Environment files
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Editor directories and files
+frontend/.vscode/
+frontend/.idea/
+frontend/*.swp
+frontend/*.swo
+frontend/*~
+
+# OS generated files in frontend
+frontend/.DS_Store
+frontend/.DS_Store?
+frontend/._*
+frontend/Thumbs.db
+frontend/ehthumbs.db
+
+# Package manager files
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/pnpm-lock.yaml
+
+# Temporary files
+frontend/*.tmp
+frontend/*.temp
+frontend/*.log
+
+# ===== END FRONTEND SPECIFIC =====
+
 # Node.js
 node_modules/
 npm-debug.log*

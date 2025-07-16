@@ -49,14 +49,20 @@ async def get_products(
             "name": product.name,
             "description": product.description,
             "category": product.category.value,
-            "status": product.status.value,
-            "price": product.price_display,
+            "base_price": product.price_display,
+            "cost": (product.cost / 100.0) if product.cost else 0,
             "image_url": product.image_url,
             "preparation_time": product.preparation_time,
-            "is_featured": product.is_featured,
-            "is_available_online": product.is_available_online,
+            "is_available": product.status == ProductStatus.ACTIVE and product.is_available_online,
             "is_customizable": product.is_customizable,
-            "is_in_stock": product.is_in_stock,
+            "ingredients": product.ingredients or [],
+            "allergens": product.allergens or [],
+            "dietary_info": "",  # We can add this field to the model later
+            "customization_options": {
+                "sizes": product.sizes or [],
+                "flavors": product.flavors or [],
+                "decorations": product.decorations or [],
+            },
             "created_at": product.created_at.isoformat()
         }
         for product in products
@@ -82,15 +88,16 @@ async def get_product(
         "name": product.name,
         "description": product.description,
         "category": product.category.value,
-        "status": product.status.value,
-        "price": product.price_display,
-        "cost": product.cost / 100.0 if product.cost else None,
-        "ingredients": product.ingredients,
-        "allergens": product.allergens,
-        "nutritional_info": product.nutritional_info,
-        "sizes": product.sizes,
-        "flavors": product.flavors,
-        "decorations": product.decorations,
+        "base_price": product.price_display,
+        "cost": product.cost / 100.0 if product.cost else 0,
+        "ingredients": product.ingredients or [],
+        "allergens": product.allergens or [],
+        "dietary_info": "",  # We can add this field to the model later
+        "customization_options": {
+            "sizes": product.sizes or [],
+            "flavors": product.flavors or [],
+            "decorations": product.decorations or [],
+        },
         "preparation_time": product.preparation_time,
         "advance_notice": product.advance_notice,
         "stock_quantity": product.stock_quantity,
@@ -99,10 +106,8 @@ async def get_product(
         "images": product.images,
         "display_order": product.display_order,
         "tags": product.tags,
-        "is_featured": product.is_featured,
-        "is_available_online": product.is_available_online,
+        "is_available": product.status == ProductStatus.ACTIVE and product.is_available_online,
         "is_customizable": product.is_customizable,
-        "is_in_stock": product.is_in_stock,
         "created_at": product.created_at.isoformat(),
         "updated_at": product.updated_at.isoformat() if product.updated_at else None
     }
