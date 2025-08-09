@@ -78,7 +78,7 @@ class Order(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    client = relationship("Client", back_populates="orders")
+    # client = relationship("Client", back_populates="orders")  # Temporarily disabled due to import issue
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     
     @property

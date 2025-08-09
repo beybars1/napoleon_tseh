@@ -38,10 +38,13 @@ class MessageProcessor:
             The created Message object or None if processing failed
         """
         try:
+            # Get sender ID - handle different field names
+            sender_id = message_data.get("sender_id") or message_data.get("sender", "")
+            
             # Get or create client
             client = await self._get_or_create_client(
                 channel=channel,
-                sender_id=message_data["sender"]
+                sender_id=sender_id
             )
             
             # Get or create conversation
@@ -55,10 +58,10 @@ class MessageProcessor:
             incoming_message = await self._create_message(
                 conversation=conversation,
                 direction=MessageDirection.INCOMING,
-                content=message_data.get("content", ""),
-                message_type=message_data.get("message_type", MessageType.TEXT),
-                external_id=message_data.get("external_id"),
-                external_data=message_data.get("raw_data")
+                content=message_data.get("content") or message_data.get("message_text", ""),
+                message_type=self._convert_message_type(message_data.get("message_type", "text")),
+                external_id=message_data.get("external_id") or message_data.get("telegram_message_id"),
+                external_data=message_data.get("raw_data") or message_data
             )
             
             # Process with AI if enabled
@@ -275,6 +278,74 @@ class MessageProcessor:
             logger.error(f"Error processing message with AI: {e}")
             await self.db.rollback()
             return None
+    
+    async def _store_message_only(
+        self,
+        channel: ConversationChannel,
+        message_data: Dict[str, Any]
+    ) -> Optional[Message]:
+        """
+        Store an incoming message without AI processing (for logging only)
+        Used to avoid duplicate responses when telegram bot service already handled AI
+        """
+        try:
+            # Get sender ID - handle different field names
+            sender_id = message_data.get("sender_id") or message_data.get("sender", "")
+            
+            # Get or create client
+            client = await self._get_or_create_client(
+                channel=channel,
+                sender_id=sender_id
+            )
+            
+            # Get or create conversation
+            conversation = await self._get_or_create_conversation(
+                client=client,
+                channel=channel,
+                external_id=message_data.get("external_id")
+            )
+            
+            # Create incoming message record (NO AI PROCESSING)
+            incoming_message = await self._create_message(
+                conversation=conversation,
+                direction=MessageDirection.INCOMING,
+                content=message_data.get("content") or message_data.get("message_text", ""),
+                message_type=self._convert_message_type(message_data.get("message_type", "text")),
+                external_id=message_data.get("external_id") or message_data.get("telegram_message_id"),
+                external_data=message_data.get("raw_data") or message_data
+            )
+            
+            # Update conversation statistics only
+            await self._update_conversation_stats(conversation)
+            
+            return incoming_message
+            
+        except Exception as e:
+            logger.error(f"Error storing message: {e}")
+            return None
+    
+    def _convert_message_type(self, message_type_str: str) -> MessageType:
+        """Convert string message type to MessageType enum"""
+        try:
+            # Handle common string formats
+            type_mapping = {
+                "text": MessageType.TEXT,
+                "image": MessageType.IMAGE,
+                "photo": MessageType.IMAGE,  # Telegram uses "photo"
+                "video": MessageType.VIDEO,
+                "audio": MessageType.AUDIO,
+                "voice": MessageType.VOICE,
+                "document": MessageType.DOCUMENT,
+                "location": MessageType.LOCATION,
+                "contact": MessageType.CONTACT,
+                "sticker": MessageType.STICKER,
+                "system": MessageType.SYSTEM,
+                "callback": MessageType.TEXT,  # Treat callback queries as text
+            }
+            
+            return type_mapping.get(message_type_str.lower(), MessageType.TEXT)
+        except (AttributeError, KeyError):
+            return MessageType.TEXT
     
     def _get_recipient_id(self, client: Client, channel: ConversationChannel) -> str:
         """Get recipient ID for sending messages"""

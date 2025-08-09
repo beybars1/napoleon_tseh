@@ -46,7 +46,7 @@ class Client(Base):
     last_order = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
-    orders = relationship("Order", back_populates="client")
+    # orders = relationship("Order", back_populates="client")  # Temporarily disabled due to import issue
     conversations = relationship("Conversation", back_populates="client")
     
     @property

@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 import httpx
 import json
 import time
+from datetime import datetime
 
 from app.core.config import settings
 from app.models.conversation import ConversationChannel
@@ -279,14 +280,77 @@ class CommunicationService:
     def _process_telegram_webhook(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Process Telegram webhook data"""
         try:
-            message = data.get("message", {})
-            return {
-                "sender": str(message.get("chat", {}).get("id", "")),
-                "content": message.get("text", ""),
-                "message_type": MessageType.TEXT,  # Simplified for now
-                "external_id": str(message.get("message_id", "")),
-                "raw_data": data
-            }
+            # Check if this is a message update
+            if "message" in data:
+                message = data["message"]
+                
+                # Extract basic message info
+                sender = message.get("from", {})
+                sender_id = str(sender.get("id", ""))
+                sender_name = f"{sender.get('first_name', '')} {sender.get('last_name', '')}".strip()
+                username = sender.get("username", "")
+                
+                # Extract message content
+                message_text = message.get("text", "")
+                message_type = "text"
+                
+                # Handle different message types
+                if "photo" in message:
+                    message_type = "photo"
+                    # Get the largest photo
+                    photos = message["photo"]
+                    if photos:
+                        largest_photo = max(photos, key=lambda x: x.get("file_size", 0))
+                        message_text = message.get("caption", "") or "Photo"
+                elif "document" in message:
+                    message_type = "document"
+                    message_text = message.get("caption", "") or "Document"
+                elif "voice" in message:
+                    message_type = "voice"
+                    message_text = "Voice message"
+                elif "location" in message:
+                    message_type = "location"
+                    location = message["location"]
+                    message_text = f"Location: {location.get('latitude')}, {location.get('longitude')}"
+                elif "contact" in message:
+                    message_type = "contact"
+                    contact = message["contact"]
+                    message_text = f"Contact: {contact.get('first_name')} {contact.get('phone_number')}"
+                
+                return {
+                    "sender_id": sender_id,
+                    "sender_name": sender_name or f"User {sender_id}",
+                    "username": username,
+                    "message_text": message_text,
+                    "message_type": message_type,
+                    "timestamp": datetime.fromtimestamp(message.get("date", 0)).isoformat(),
+                    "telegram_user_id": sender.get("id"),
+                    "telegram_username": f"@{username}" if username else f"user_{sender_id}",
+                    "telegram_message_id": message.get("message_id"),
+                    "chat_id": message.get("chat", {}).get("id")
+                }
+            
+            # Handle callback queries (inline keyboard button presses)
+            elif "callback_query" in data:
+                callback = data["callback_query"]
+                sender = callback.get("from", {})
+                
+                return {
+                    "sender_id": str(sender.get("id", "")),
+                    "sender_name": f"{sender.get('first_name', '')} {sender.get('last_name', '')}".strip(),
+                    "username": sender.get("username", ""),
+                    "message_text": f"Button pressed: {callback.get('data', '')}",
+                    "message_type": "callback",
+                    "timestamp": datetime.now().isoformat(),
+                    "telegram_user_id": sender.get("id"),
+                    "telegram_username": f"@{sender.get('username')}" if sender.get("username") else f"user_{sender.get('id')}",
+                    "callback_data": callback.get("data"),
+                    "chat_id": callback.get("message", {}).get("chat", {}).get("id")
+                }
+            
+            logger.warning(f"Unhandled Telegram webhook type: {list(data.keys())}")
+            return None
+            
         except Exception as e:
             logger.error(f"Error processing Telegram webhook: {e}")
             return None

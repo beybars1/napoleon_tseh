@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
-from typing import List
+from typing import List, Optional
 import os
 
 
@@ -29,9 +29,11 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = Field(..., env="TWILIO_AUTH_TOKEN")
     TWILIO_PHONE_NUMBER: str = Field(..., env="TWILIO_PHONE_NUMBER")
     
-    # Telegram
-    TELEGRAM_BOT_TOKEN: str = Field(..., env="TELEGRAM_BOT_TOKEN")
-    TELEGRAM_WEBHOOK_URL: str = Field(..., env="TELEGRAM_WEBHOOK_URL")
+    # Telegram Bot Configuration
+    TELEGRAM_BOT_TOKEN: str = Field(..., description="Telegram bot token from BotFather")
+    TELEGRAM_WEBHOOK_URL: Optional[str] = Field(None, description="Webhook URL for production")
+    TELEGRAM_WEBHOOK_DOMAIN: Optional[str] = Field(None, description="Domain for webhook setup")
+    TELEGRAM_PRODUCTION_MODE: bool = Field(False, description="Enable production webhook mode")
     
     # WhatsApp
     WHATSAPP_ACCESS_TOKEN: str = Field(..., env="WHATSAPP_ACCESS_TOKEN")

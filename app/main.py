@@ -10,6 +10,7 @@ from app.core.redis import init_redis
 from app.api.v1.router import api_router
 from app.services.ai_service import AIService
 from app.services.communication_service import CommunicationService
+from app.services.telegram_startup_service import telegram_startup_service
 
 # Configure structured logging
 structlog.configure(
@@ -55,10 +56,40 @@ async def lifespan(app: FastAPI):
     comm_service = CommunicationService()
     app.state.communication_service = comm_service
     logger.info("Communication service initialized")
+
+    # Initialize and start Telegram bot
+    telegram_task = None
+    try:
+        logger.info("🤖 Starting Telegram bot...")
+        bot_result = await telegram_startup_service.start_bot()
+        app.state.telegram_service = telegram_startup_service
+        
+        if bot_result.get("success"):
+            logger.info(f"✅ Telegram bot started in {bot_result.get('mode')} mode")
+            if bot_result.get("webhook_url"):
+                logger.info(f"🔗 Webhook URL: {bot_result.get('webhook_url')}")
+        else:
+            logger.error(f"❌ Failed to start Telegram bot: {bot_result.get('error')}")
+    except Exception as e:
+        logger.error(f"❌ Error starting Telegram bot: {e}")
+        # Don't fail the entire app if bot fails to start
     
     yield
     
-    logger.info("Shutting down Cake CRM application")
+    # Cleanup on shutdown
+    try:
+        logger.info("🛑 Shutting down Telegram bot...")
+        if hasattr(app.state, 'telegram_service'):
+            # Stop the bot gracefully using the new method
+            try:
+                await app.state.telegram_service.stop_bot()
+                logger.info("✅ Telegram bot stopped successfully")
+            except Exception as stop_error:
+                logger.warning(f"Warning during bot shutdown: {stop_error}")
+    except Exception as e:
+        logger.error(f"Error shutting down Telegram bot: {e}")
+    
+    logger.info("Shutting down Napoleon-Tseh CRM application")
 
 
 # Create FastAPI application
