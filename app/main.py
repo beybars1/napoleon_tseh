@@ -60,18 +60,19 @@ async def lifespan(app: FastAPI):
     # Initialize and start Telegram bot
     telegram_task = None
     try:
-        logger.info("🤖 Starting Telegram bot...")
-        bot_result = await telegram_startup_service.start_bot()
+        logger.info("🤖 Telegram bot service initialized (not auto-started)")
+        # bot_result = await telegram_startup_service.start_bot()
         app.state.telegram_service = telegram_startup_service
         
-        if bot_result.get("success"):
-            logger.info(f"✅ Telegram bot started in {bot_result.get('mode')} mode")
-            if bot_result.get("webhook_url"):
-                logger.info(f"🔗 Webhook URL: {bot_result.get('webhook_url')}")
-        else:
-            logger.error(f"❌ Failed to start Telegram bot: {bot_result.get('error')}")
+        # if bot_result.get("success"):
+        #     logger.info(f"✅ Telegram bot started in {bot_result.get('mode')} mode")
+        #     if bot_result.get("webhook_url"):
+        #         logger.info(f"🔗 Webhook URL: {bot_result.get('webhook_url')}")
+        # else:
+        #     logger.error(f"❌ Failed to start Telegram bot: {bot_result.get('error')}")
+        logger.info("💡 Use POST /api/v1/webhooks/telegram/start_bot to start the bot manually")
     except Exception as e:
-        logger.error(f"❌ Error starting Telegram bot: {e}")
+        logger.error(f"❌ Error initializing Telegram bot service: {e}")
         # Don't fail the entire app if bot fails to start
     
     yield

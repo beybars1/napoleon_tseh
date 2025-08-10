@@ -66,7 +66,7 @@ const OrdersPage: React.FC = () => {
       width: 120,
       renderCell: (params) => (
         <Chip
-          label={params.value.toUpperCase()}
+          label={params.value?.toUpperCase() || 'UNKNOWN'}
           color={getStatusColor(params.value) as any}
           size="small"
         />
@@ -90,7 +90,7 @@ const OrdersPage: React.FC = () => {
       width: 120,
       renderCell: (params) => (
         <Chip
-          label={params.value.toUpperCase()}
+          label={params.value?.toUpperCase() || 'N/A'}
           variant="outlined"
           size="small"
         />

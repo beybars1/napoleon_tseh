@@ -154,7 +154,7 @@ const ClientsPage: React.FC = () => {
       width: 150,
       renderCell: (params) => (
         <Chip
-          label={params.value.toUpperCase()}
+          label={params.value?.toUpperCase() || 'N/A'}
           color={getContactMethodColor(params.value) as any}
           size="small"
         />

@@ -82,6 +82,7 @@ const ConversationsPage: React.FC = () => {
   const [selectedChat, setSelectedChat] = useState<TelegramChat | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chatsLoading, setChatsLoading] = useState(false); // Separate loading state for chats
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'telegram'>('telegram');
   const [messageDialogOpen, setMessageDialogOpen] = useState(false);
@@ -102,7 +103,6 @@ const ConversationsPage: React.FC = () => {
     if (!autoRefresh) return;
     
     const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing chats...');
       loadTelegramChats();
     }, 30000); // 30 seconds instead of 10
 
@@ -112,30 +112,25 @@ const ConversationsPage: React.FC = () => {
   // Refresh messages when selecting a chat (one-time only)
   useEffect(() => {
     if (selectedChat) {
-      console.log(`🔄 Loading messages for chat ${selectedChat.conversation_id}`);
       loadChatMessages(selectedChat.conversation_id);
     }
   }, [selectedChat?.conversation_id]); // Only trigger when conversation_id changes
 
   const loadConversations = async () => {
     try {
-      setLoading(true);
       const data = await conversationsApi.getConversations();
       setConversations(data);
     } catch (error) {
       console.error('Error loading conversations:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadTelegramChats = async () => {
-    if (loading) return; // Prevent concurrent calls
+    if (chatsLoading) return; // Prevent concurrent calls using separate loading state
     
     try {
-      setLoading(true);
+      setChatsLoading(true);
       setApiError('');
-      console.log('🔍 Loading Telegram chats...');
       
       // Always get fresh data, no cache
       const response = await fetch(
@@ -149,22 +144,18 @@ const ConversationsPage: React.FC = () => {
         }
       );
       
-      console.log('📡 Chats response status:', response.status);
-      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('📊 Chats loaded:', data.chats?.length || 0);
-      
       setTelegramChats(data.chats || []);
-      console.log('✅ Telegram chats loaded successfully, state updated with:', data.chats?.length || 0, 'chats');
     } catch (error) {
       console.error('❌ Error loading Telegram chats:', error);
       setApiError(`Failed to load chats: ${error}`);
     } finally {
-      setLoading(false);
+      setChatsLoading(false);
+      setLoading(false); // Set main loading to false after first load attempt
     }
   };
 
@@ -173,7 +164,6 @@ const ConversationsPage: React.FC = () => {
     
     try {
       setMessagesLoading(true);
-      console.log(`🔄 Loading messages for conversation ${conversationId}...`);
       
       // Always get fresh data, no cache
       const response = await fetch(
@@ -187,14 +177,11 @@ const ConversationsPage: React.FC = () => {
         }
       );
       
-      console.log('📡 Messages response status:', response.status);
-      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log('📊 Messages loaded:', data.messages?.length || 0);
       
       // Sort messages by created_at to ensure proper order
       const sortedMessages = (data.messages || []).sort((a: ChatMessage, b: ChatMessage) => 
@@ -202,7 +189,6 @@ const ConversationsPage: React.FC = () => {
       );
       
       setChatMessages(sortedMessages);
-      console.log('✅ Messages updated in state');
     } catch (error) {
       console.error('❌ Error loading chat messages:', error);
     } finally {
@@ -285,6 +271,7 @@ const ConversationsPage: React.FC = () => {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading conversations...</Typography>
       </Box>
     );
   }
@@ -309,15 +296,16 @@ const ConversationsPage: React.FC = () => {
             <Button
               variant="outlined"
               size="small"
+              disabled={chatsLoading}
               onClick={() => {
                 loadTelegramChats();
                 if (selectedChat) {
                   loadChatMessages(selectedChat.conversation_id);
                 }
               }}
-              startIcon={<Refresh />}
+              startIcon={chatsLoading ? <CircularProgress size={16} /> : <Refresh />}
             >
-              Refresh Now
+              {chatsLoading ? 'Loading...' : 'Refresh Now'}
             </Button>
             <Button
               variant={viewMode === 'telegram' ? 'contained' : 'outlined'}
@@ -373,7 +361,14 @@ const ConversationsPage: React.FC = () => {
               </Alert>
             )}
             
-            {viewMode === 'telegram' ? (
+            {chatsLoading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
+                <CircularProgress size={24} />
+                <Typography sx={{ ml: 2 }}>Loading chats...</Typography>
+              </Box>
+            )}
+            
+            {!chatsLoading && viewMode === 'telegram' ? (
               <List sx={{ p: 0 }}>
                 {filteredChats.map((chat) => (
                   <ListItemButton

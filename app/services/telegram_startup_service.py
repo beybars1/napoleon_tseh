@@ -211,10 +211,10 @@ class TelegramStartupService:
                 except asyncio.CancelledError:
                     logger.info("✅ Polling task cancelled successfully")
             
-            # Stop the bot application
-            if hasattr(self.bot_service, 'application'):
-                await self.bot_service.application.stop()
-                logger.info("✅ Bot application stopped")
+            # Use the bot service's stop method
+            if hasattr(self.bot_service, 'stop_bot'):
+                await self.bot_service.stop_bot()
+                logger.info("✅ Bot service stopped")
             
             return {"success": True, "message": "Bot stopped successfully"}
             

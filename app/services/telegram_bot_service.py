@@ -931,17 +931,67 @@ Click below to open in your maps app:
     async def run_polling(self):
         """Run the bot with polling (for development)"""
         logger.info("Starting Telegram bot with polling...")
-        await self.application.initialize()
-        await self.application.start()
-        await self.application.updater.start_polling(drop_pending_updates=True)
         
         try:
-            # Keep the bot running
-            await asyncio.Event().wait()
-        except KeyboardInterrupt:
-            logger.info("Stopping bot...")
-        finally:
-            await self.application.stop()
+            # First, try to initialize and start
+            try:
+                await self.application.initialize()
+                await self.application.start()
+                await self.application.updater.start_polling(drop_pending_updates=True)
+                logger.info("✅ Bot polling started successfully")
+                
+            except RuntimeError as e:
+                if "already running" in str(e) or "already initialized" in str(e):
+                    logger.warning(f"Application already running: {e}")
+                    # Stop and restart
+                    await self._stop_application()
+                    await asyncio.sleep(1)  # Wait a moment
+                    
+                    # Try again
+                    await self.application.initialize()
+                    await self.application.start()
+                    await self.application.updater.start_polling(drop_pending_updates=True)
+                    logger.info("✅ Bot polling restarted successfully")
+                else:
+                    raise
+            
+            # Store the polling task reference
+            self.polling_task = asyncio.current_task()
+            
+            try:
+                # Keep the bot running
+                await asyncio.Event().wait()
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                logger.info("Stopping bot...")
+            finally:
+                await self._stop_application()
+                
+        except Exception as e:
+            logger.error(f"Error in run_polling: {e}")
+            await self._stop_application()
+            raise
+    
+    async def _stop_application(self):
+        """Helper method to safely stop the application"""
+        try:
+            if hasattr(self.application, 'updater') and self.application.updater.running:
+                await self.application.updater.stop()
+            if hasattr(self.application, '_running') and self.application._running:
+                await self.application.stop()
+        except Exception as e:
+            logger.error(f"Error stopping application: {e}")
+    
+    async def stop_bot(self):
+        """Stop the bot gracefully"""
+        logger.info("🛑 Stopping bot...")
+        
+        # Cancel polling task if it exists
+        if hasattr(self, 'polling_task') and self.polling_task and not self.polling_task.done():
+            self.polling_task.cancel()
+            logger.info("✅ Polling task cancelled")
+        
+        await self._stop_application()
+        logger.info("✅ Bot stopped successfully")
     
     async def set_webhook(self, webhook_url: str):
         """Set webhook for production deployment"""

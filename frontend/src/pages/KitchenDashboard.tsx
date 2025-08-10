@@ -126,7 +126,7 @@ const KitchenDashboard: React.FC = () => {
                       {order.order_number}
                     </Typography>
                     <Chip
-                      label={order.status.toUpperCase()}
+                      label={order.status?.toUpperCase() || 'UNKNOWN'}
                       color={getStatusColor(order.status) as any}
                       size="small"
                     />

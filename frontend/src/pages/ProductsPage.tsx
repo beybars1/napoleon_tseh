@@ -156,7 +156,7 @@ const ProductsPage: React.FC = () => {
       width: 120,
       renderCell: (params) => (
         <Chip
-          label={params.value.toUpperCase()}
+          label={params.value?.toUpperCase() || 'UNKNOWN'}
           color={getCategoryColor(params.value) as any}
           size="small"
           icon={<Category />}
