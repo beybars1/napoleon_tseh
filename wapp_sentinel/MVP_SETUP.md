@@ -66,6 +66,8 @@ python test_mvp_workflow.py flow
 - `GET /orders/today` - View today's orders
 - `POST /process-messages` - Manually process new messages
 - `POST /send-daily-orders` - Manually send daily consolidation
+- `GET /messages/all` - Retrieve all messages with filtering options
+- `GET /messages/summary` - Get message statistics and overview
 
 ## What's Missing for Production
 
@@ -102,8 +104,48 @@ python test_mvp_workflow.py flow
 
 ## API Endpoints
 
+### Core Functionality
 - `GET /` - System status
 - `GET /orders` - All orders
 - `GET /orders/today` - Today's orders  
 - `POST /process-messages` - Process new messages
 - `POST /send-daily-orders` - Send daily consolidation
+- `POST /bulk-process-messages` - Bulk process historical messages
+
+### Message Retrieval (Enhanced!)
+- `GET /messages/all` - Retrieve all messages (incoming + outgoing) with flexible filtering
+- `GET /messages/summary` - Get message statistics and overview
+- `GET /messages/outgoing` - Get only outgoing messages (sent by your bakery)
+- `GET /messages/debug` - Debug different message retrieval methods
+
+#### Message Retrieval Parameters:
+**GET /messages/all**
+- `chat_id` (optional): WhatsApp chat ID (defaults to main group)
+- `days_back` (optional): Get messages from last N days
+- `hours_back` (optional): Get messages from last N hours (takes precedence)
+- `max_messages` (optional): Maximum messages to retrieve (default: 1000)
+- `message_type` (optional): Filter by 'incoming', 'outgoing', or leave empty for all
+
+**Examples:**
+```bash
+# Get all available messages
+curl "http://localhost:8000/messages/all"
+
+# Get messages from last 24 hours
+curl "http://localhost:8000/messages/all?hours_back=24"
+
+# Get only incoming messages from last 7 days
+curl "http://localhost:8000/messages/all?days_back=7&message_type=incoming"
+
+# Get only outgoing messages (your bakery's messages)
+curl "http://localhost:8000/messages/all?days_back=7&message_type=outgoing"
+
+# Get only outgoing messages from last 48 hours
+curl "http://localhost:8000/messages/outgoing?hours_back=48"
+
+# Debug message retrieval methods
+curl "http://localhost:8000/messages/debug"
+
+# Get summary statistics for last 3 days
+curl "http://localhost:8000/messages/summary?days_back=3"
+```
