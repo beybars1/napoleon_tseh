@@ -1,1 +1,0 @@
-# Database models for the CRM system 
