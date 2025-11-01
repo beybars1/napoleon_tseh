@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os
+import json
 import httpx
 from dotenv import load_dotenv
 from app.database import WhatsAppNotification, SessionLocal
@@ -11,6 +12,7 @@ from app.database.models import (
 )
 from app.database.database import SessionLocal
 from datetime import datetime
+import pika
 
 # Load environment variables
 load_dotenv()
@@ -19,6 +21,8 @@ app = FastAPI(title="WhatsApp Notification Service")
 
 # Get Green API base URL from environment variables
 GREEN_API_BASE_URL = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
+RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "greenapi_notifications")
 
 
 # Pydantic модель для валидации входящих данных
@@ -229,58 +233,54 @@ async def process_and_delete_notification(notification_data: Dict[str, Any]):
     except Exception as e:
         print(f"Error deleting notification: {e}")
 
-@app.get("/receiveNotification")
-async def receive_notification(
-    background_tasks: BackgroundTasks,
-    receive_timeout: Optional[int] = 5
-):
+def publish_to_rabbitmq(message: dict):
+    """Publish message to RabbitMQ queue"""
+    try:
+        credentials = pika.PlainCredentials(
+            os.getenv("RABBITMQ_USER", "guest"),
+            os.getenv("RABBITMQ_PASSWORD", "guest")
+        )
+        parameters = pika.ConnectionParameters(
+            host=RABBITMQ_HOST,
+            port=int(os.getenv("RABBITMQ_PORT", "5672")),
+            credentials=credentials
+        )
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        
+        channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+        
+        channel.basic_publish(
+            exchange='',
+            routing_key=RABBITMQ_QUEUE,
+            body=json.dumps(message),
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # делаем сообщение persistent
+            )
+        )
+        
+        connection.close()
+        return True
+    except Exception as e:
+        print(f"Error publishing to RabbitMQ: {e}")
+        return False
+
+@app.post("/receiveNotification")
+async def receive_notification(request: Request):
     """
     Endpoint to receive notifications from WhatsApp Green API
-    
-    Args:
-        background_tasks: FastAPI background tasks
-        receive_timeout (int, optional): Timeout in seconds. Defaults to 5.
-    
-    Returns:
-        Dict: Notification data from Green API
     """
-    instance_id = os.getenv("GREENAPI_INSTANCE")
-    token = os.getenv("GREENAPI_TOKEN")
-    
-    if not instance_id or not token:
-        raise HTTPException(
-            status_code=500,
-            detail="Environment variables GREENAPI_INSTANCE and GREENAPI_TOKEN must be set"
-        )
-    
-    # Construct Green API URL
-    green_api_url = f"{GREEN_API_BASE_URL}/waInstance{instance_id}/receiveNotification/{token}"
-    
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                green_api_url,
-                params={"receiveTimeout": receive_timeout},
-                timeout=receive_timeout + 5  # Add small buffer to client timeout
-            )
-            response.raise_for_status()
-            notification_data = response.json()
+        notification_data = await request.json()
+        
+        # Публикуем в RabbitMQ
+        if publish_to_rabbitmq(notification_data):
+            return {"status": "queued", "message": "Notification sent to processing queue"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to queue message")
             
-            if notification_data:
-                # Запускаем обработку и удаление уведомления в фоновом режиме
-                background_tasks.add_task(process_and_delete_notification, notification_data)
-                
-            return notification_data
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"Green API request failed: {e.response.text}"
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to connect to Green API: {str(e)}"
-        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
