@@ -20,9 +20,9 @@ class WhatsAppNotification(Base):
     media_url = Column(String, nullable=True)
     raw_data = Column(JSONB, nullable=False)
     processing_status = Column(String, nullable=False, server_default='new')
-    message_timestamp = Column(DateTime(timezone=True), nullable=False)
-    received_at = Column(DateTime(timezone=True), server_default='now()')
-    processed_at = Column(DateTime(timezone=True), nullable=True)
+    message_timestamp = Column(DateTime(timezone=False), nullable=False)
+    received_at = Column(DateTime(timezone=False), server_default='now()')
+    processed_at = Column(DateTime(timezone=False), nullable=True)
 
     # Индексы для оптимизации запросов
     __table_args__ = (
@@ -76,7 +76,7 @@ class WhatsAppNotification(Base):
 class OutgoingAPIMessage(Base):
     __tablename__ = "outgoing_api_message"
     id = Column(Integer, primary_key=True)
-    receipt_id = Column(Integer)
+    receipt_id = Column(String)
     id_message = Column(String)
     timestamp = Column(DateTime(timezone=True))
     chat_id = Column(String)
@@ -89,7 +89,7 @@ class OutgoingAPIMessage(Base):
 class IncomingMessage(Base):
     __tablename__ = "incoming_message"
     id = Column(Integer, primary_key=True)
-    receipt_id = Column(Integer)
+    receipt_id = Column(String)
     id_message = Column(String)
     timestamp = Column(DateTime(timezone=True))
     chat_id = Column(String)
@@ -107,7 +107,7 @@ class IncomingMessage(Base):
 class IncomingCall(Base):
     __tablename__ = "incoming_call"
     id = Column(Integer, primary_key=True)
-    receipt_id = Column(Integer)
+    receipt_id = Column(String)
     from_id = Column(String)
     status = Column(String)
     id_message = Column(String)
@@ -117,7 +117,7 @@ class IncomingCall(Base):
 class OutgoingMessage(Base):
     __tablename__ = "outgoing_message"
     id = Column(Integer, primary_key=True)
-    receipt_id = Column(Integer)
+    receipt_id = Column(String)
     id_message = Column(String)
     timestamp = Column(DateTime(timezone=True))
     chat_id = Column(String)
@@ -130,7 +130,7 @@ class OutgoingMessage(Base):
 class OutgoingMessageStatus(Base):
     __tablename__ = "outgoing_message_status"
     id = Column(Integer, primary_key=True)
-    receipt_id = Column(Integer)
+    receipt_id = Column(String)
     chat_id = Column(String)
     status = Column(String)
     id_message = Column(String)
