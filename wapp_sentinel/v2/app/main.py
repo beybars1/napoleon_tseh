@@ -1,23 +1,16 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 import os
 import json
 import httpx
 from dotenv import load_dotenv
-from app.database import WhatsAppNotification, SessionLocal
-from app.database.models import (
-    OutgoingAPIMessage, IncomingMessage, IncomingCall,
-    OutgoingMessage, OutgoingMessageStatus
-)
-from app.database.database import SessionLocal
-from datetime import datetime
 import pika
 
 # Load environment variables
 load_dotenv()
 
-app = FastAPI(title="WhatsApp Notification Service")
+app = FastAPI(title="Napoleon Tseh WhatsApp Service")
 
 # Get Green API base URL from environment variables
 GREEN_API_BASE_URL = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
@@ -121,117 +114,6 @@ async def remove_notification(receipt_id: int):
             status_code=500,
             detail=f"Failed to connect to Green API: {str(e)}"
         )
-
-def save_event_to_db(notification_data):
-    """
-    Save the incoming notification event to the database
-    
-    Args:
-        notification_data (dict): The notification data from Green API
-    """
-    body = notification_data.get('body', {})
-    type_webhook = body.get('typeWebhook')
-    db = SessionLocal()
-    try:
-        if type_webhook == "outgoingAPIMessageReceived":
-            msg = OutgoingAPIMessage(
-                receipt_id=notification_data.get('receiptId'),
-                id_message=body.get('idMessage'),
-                timestamp=datetime.fromtimestamp(body.get('timestamp')) if body.get('timestamp') else None,
-                chat_id=body.get('senderData', {}).get('chatId'),
-                sender=body.get('senderData', {}).get('sender'),
-                chat_name=body.get('senderData', {}).get('chatName'),
-                sender_name=body.get('senderData', {}).get('senderName'),
-                text=body.get('messageData', {}).get('extendedTextMessageData', {}).get('text'),
-                raw_data=notification_data
-            )
-            db.add(msg)
-        elif type_webhook == "incomingMessageReceived":
-            msg = IncomingMessage(
-                receipt_id=notification_data.get('receiptId'),
-                id_message=body.get('idMessage'),
-                timestamp=datetime.fromtimestamp(body.get('timestamp')) if body.get('timestamp') else None,
-                chat_id=body.get('senderData', {}).get('chatId'),
-                sender=body.get('senderData', {}).get('sender'),
-                chat_name=body.get('senderData', {}).get('chatName'),
-                sender_name=body.get('senderData', {}).get('senderName'),
-                sender_contact_name=body.get('senderData', {}).get('senderContactName'),
-                type_message=body.get('messageData', {}).get('typeMessage'),
-                text_message=body.get('messageData', {}).get('textMessageData', {}).get('textMessage'),
-                type_webhook=body.get('typeWebhook'),
-                deleted_message_type=body.get('messageData', {}).get('deletedMessageData', {}).get('typeMessage'),
-                deleted_message_stanza_id=body.get('messageData', {}).get('deletedMessageData', {}).get('stanzaId'),
-                raw_data=notification_data
-            )
-            db.add(msg)
-        elif type_webhook == "incomingCall":
-            msg = IncomingCall(
-                receipt_id=notification_data.get('receiptId'),
-                from_id=body.get('from'),
-                status=body.get('status'),
-                id_message=body.get('idMessage'),
-                timestamp=datetime.fromtimestamp(body.get('timestamp')) if body.get('timestamp') else None,
-                raw_data=notification_data
-            )
-            db.add(msg)
-        elif type_webhook == "outgoingMessageReceived":
-            msg = OutgoingMessage(
-                receipt_id=notification_data.get('receiptId'),
-                id_message=body.get('idMessage'),
-                timestamp=datetime.fromtimestamp(body.get('timestamp')) if body.get('timestamp') else None,
-                chat_id=body.get('senderData', {}).get('chatId'),
-                sender=body.get('senderData', {}).get('sender'),
-                chat_name=body.get('senderData', {}).get('chatName'),
-                sender_name=body.get('senderData', {}).get('senderName'),
-                text=body.get('messageData', {}).get('textMessageData', {}).get('textMessage'),
-                raw_data=notification_data
-            )
-            db.add(msg)
-        elif type_webhook == "outgoingMessageStatus":
-            msg = OutgoingMessageStatus(
-                receipt_id=notification_data.get('receiptId'),
-                chat_id=body.get('chatId'),
-                status=body.get('status'),
-                id_message=body.get('idMessage'),
-                send_by_api=body.get('sendByApi'),
-                timestamp=datetime.fromtimestamp(body.get('timestamp')) if body.get('timestamp') else None,
-                raw_data=notification_data
-            )
-            db.add(msg)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        print(f"Error saving event: {e}")
-    finally:
-        db.close()
-
-async def process_and_delete_notification(notification_data: Dict[str, Any]):
-    """
-    Process the notification and then delete it from Green API
-    
-    Args:
-        notification_data: The notification data from Green API
-    """
-    if not notification_data:
-        return
-        
-    receipt_id = notification_data.get("receiptId")
-    if not receipt_id:
-        return
-        
-    # Сохраняем событие в нужную таблицу
-    save_event_to_db(notification_data)
-    
-    # Delete from Green API
-    instance_id = os.getenv("GREENAPI_INSTANCE")
-    token = os.getenv("GREENAPI_TOKEN")
-    delete_url = f"{GREEN_API_BASE_URL}/waInstance{instance_id}/deleteNotification/{token}/{receipt_id}"
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.delete(delete_url)
-    except Exception as e:
-        print(f"Error deleting notification: {e}")
 
 def publish_to_rabbitmq(message: dict):
     """Publish message to RabbitMQ queue"""
