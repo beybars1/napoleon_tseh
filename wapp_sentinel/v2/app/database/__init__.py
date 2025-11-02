@@ -1,5 +1,6 @@
 from .models import (
     Base, 
+    Order,
     OutgoingAPIMessage, 
     IncomingMessage, 
     IncomingCall,
@@ -12,6 +13,7 @@ __all__ = [
     'Base',
     'SessionLocal',
     'engine',
+    'Order',
     'OutgoingAPIMessage',
     'IncomingMessage',
     'IncomingCall',
