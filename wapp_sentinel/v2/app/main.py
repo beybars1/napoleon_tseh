@@ -1,14 +1,20 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from datetime import date, datetime
 import os
 import json
 import httpx
 from dotenv import load_dotenv
 import pika
+from sqlalchemy.orm import Session
 
 # Load environment variables
 load_dotenv()
+
+# Import database dependencies
+from app.database.database import SessionLocal
+from app.services.daily_report_service import DailyReportService
 
 app = FastAPI(title="Napoleon Tseh WhatsApp Service")
 
@@ -27,6 +33,23 @@ class SendMessageRequest(BaseModel):
     """Pydantic model for sending message request"""
     chatId: str
     message: str
+
+class DailyReportRequest(BaseModel):
+    """Pydantic model for daily report request"""
+    date: str  # Format: YYYY-MM-DD
+    chat_id: str
+    
+class DailyReportPreviewRequest(BaseModel):
+    """Pydantic model for daily report preview"""
+    date: str  # Format: YYYY-MM-DD
+
+# Dependency to get database session
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.post("/sendMessage")
 async def send_message(message_request: SendMessageRequest):
@@ -163,6 +186,123 @@ async def receive_notification(request: Request):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/orders/send-daily-report")
+async def send_daily_report(
+    request: DailyReportRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Send daily order report to specified WhatsApp chat
+    
+    Args:
+        request: DailyReportRequest with date and chat_id
+        db: Database session
+        
+    Returns:
+        Status of report generation and sending
+    """
+    try:
+        # Парсим дату
+        target_date = datetime.strptime(request.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM-DD"
+        )
+    
+    try:
+        service = DailyReportService(db)
+        result = await service.generate_and_send_report(target_date, request.chat_id)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate/send report: {str(e)}"
+        )
+
+
+@app.post("/orders/preview-daily-report")
+async def preview_daily_report(
+    request: DailyReportPreviewRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Preview daily order report without sending to WhatsApp
+    
+    Args:
+        request: DailyReportPreviewRequest with date
+        db: Database session
+        
+    Returns:
+        Formatted report text and order count
+    """
+    try:
+        # Парсим дату
+        target_date = datetime.strptime(request.date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM-DD"
+        )
+    
+    try:
+        service = DailyReportService(db)
+        orders = service.get_orders_for_date(target_date)
+        report_text = service.format_report(orders, target_date)
+        
+        return {
+            "status": "success",
+            "date": target_date.isoformat(),
+            "orders_count": len(orders),
+            "report_preview": report_text
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate preview: {str(e)}"
+        )
+
+
+@app.get("/orders/daily-report/{date_str}")
+async def get_daily_report_quick(
+    date_str: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Quick GET endpoint to preview daily report
+    
+    Args:
+        date_str: Date in format YYYY-MM-DD
+        db: Database session
+        
+    Returns:
+        Formatted report preview
+    """
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM-DD"
+        )
+    
+    try:
+        service = DailyReportService(db)
+        orders = service.get_orders_for_date(target_date)
+        report_text = service.format_report(orders, target_date)
+        
+        return {
+            "date": target_date.isoformat(),
+            "orders_count": len(orders),
+            "report": report_text
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate report: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn

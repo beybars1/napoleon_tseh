@@ -31,8 +31,8 @@ class Order(Base):
     # Товары
     items = Column(JSONB)  # [{"name": "...", "quantity": "..."}]
     
-    # Сотрудник
-    accepted_by = Column(String(100))
+    # Имя клиента
+    client_name = Column(String(100))
     
     # Сырые данные
     raw_message_text = Column(Text, nullable=False)
@@ -54,7 +54,7 @@ class Order(Base):
     )
     
     def __repr__(self):
-        return f"<Order(id={self.id}, delivery={self.estimated_delivery_datetime}, accepted_by={self.accepted_by})>"
+        return f"<Order(id={self.id}, delivery={self.estimated_delivery_datetime}, client_name={self.client_name})>"
 
 class OutgoingAPIMessage(Base):
     __tablename__ = "outgoing_api_message"

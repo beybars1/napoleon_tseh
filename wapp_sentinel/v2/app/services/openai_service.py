@@ -25,14 +25,18 @@ class OpenAIOrderParser:
 
 Сообщения могут быть на русском, казахском, английском или смешанном языке.
 
+ВАЖНО: Текущий год - {current_year}. Используйте его для всех дат.
+
 ПРАВИЛА ПАРСИНГА:
 
 1. Дата и время доставки (estimated_delivery_datetime):
    - "01.11.25 на 14:00" → "2025-11-01 14:00:00"
    - "1 ноября к 2 часам" → "2025-11-01 14:00:00"
    - "завтра на 10:00" → следующий день + время
+   - "04.11 в 12:00" → используйте текущий год {current_year}
+   - Если год НЕ указан явно, используйте текущий год {current_year}
    - Если только дата без времени → добавьте 00:00:00
-   - Формат: "YYYY-MM-DD HH:MM:SS"
+   - Формат ВСЕГДА: "YYYY-MM-DD HH:MM:SS"
 
 2. Статус оплаты (payment_status):
    - "Оплачено", "paid", "төленген", "оплата прошла" → true
@@ -40,7 +44,7 @@ class OpenAIOrderParser:
    - Если не указано → null
 
 3. Товары (items):
-   - Каждый товар как {"name": "название", "quantity": "количество"}
+   - Каждый товар как {{"name": "название", "quantity": "количество"}}
    - Количество может быть: "1кг", "2шт", "на компанию", "6", "1" и т.д.
    - Извлекайте ВСЕ товары из сообщения
 
@@ -49,9 +53,10 @@ class OpenAIOrderParser:
    - Первый номер → contact_number_primary
    - Второй номер (если есть) → contact_number_secondary
 
-5. Сотрудник (accepted_by):
-   - Обычно имя в конце сообщения
-   - Примеры: "Айнур", "Мария", "Асель", "Айгерим"
+5. Имя клиента (client_name):
+   - Обычно имя клиента в сообщении
+   - Примеры: "Айнур", "Мария", "Асель", "Айгерим", "Иван Петров"
+   - Может быть в любом месте сообщения, но часто в конце
 
 6. Уверенность (confidence):
    - "high" - дата доставки И товары И контакт найдены
@@ -72,6 +77,12 @@ class OpenAIOrderParser:
             Dict with parsed order information
         """
         try:
+            # Получаем текущий год для промпта
+            current_year = datetime.now().year
+            
+            # Форматируем system prompt с текущим годом
+            system_prompt = self.system_prompt.format(current_year=current_year)
+            
             user_prompt = f"""
 Распарсите следующее сообщение заказа:
 
@@ -86,15 +97,17 @@ class OpenAIOrderParser:
   "items": [
     {{"name": "название товара", "quantity": "количество"}}
   ],
-  "accepted_by": "имя сотрудника или null",
+  "client_name": "имя клиента или null",
   "confidence": "high/medium/low"
 }}
+
+ВАЖНО: Если год не указан в дате, используйте {current_year}.
 """
             
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 response_format={"type": "json_object"},
@@ -150,7 +163,7 @@ class OpenAIOrderParser:
             'contact_number_primary': None,
             'contact_number_secondary': None,
             'items': [],
-            'accepted_by': None,
+            'client_name': None,
             'confidence': 'low'
         }
 

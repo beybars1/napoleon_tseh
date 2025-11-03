@@ -27,7 +27,7 @@ def get_timestamp(ts):
         return None
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "greenapi_notifications")
+RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "napoleon_message_queue")
 ORDER_PROCESSING_QUEUE = os.getenv("ORDER_PROCESSING_QUEUE", "order_processing")
 TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "120363403664602093@g.us")
 

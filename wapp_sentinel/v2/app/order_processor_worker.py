@@ -127,7 +127,7 @@ def process_order_message(order_data: dict):
             contact_number_primary=parsed_data.get('contact_number_primary'),
             contact_number_secondary=parsed_data.get('contact_number_secondary'),
             items=parsed_data.get('items', []),
-            accepted_by=parsed_data.get('accepted_by'),
+            client_name=parsed_data.get('client_name'),
             raw_message_text=text,
             openai_response=parsed_data,
             confidence=parsed_data.get('confidence', 'low'),
