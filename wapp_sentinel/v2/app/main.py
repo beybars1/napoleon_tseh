@@ -8,6 +8,7 @@ import httpx
 from dotenv import load_dotenv
 import pika
 from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager
 
 # Load environment variables
 load_dotenv()
@@ -15,8 +16,23 @@ load_dotenv()
 # Import database dependencies
 from app.database.database import SessionLocal
 from app.services.daily_report_service import DailyReportService
+from app.scheduler import scheduler_instance
 
-app = FastAPI(title="Napoleon Tseh WhatsApp Service")
+
+# Lifespan context manager для запуска/остановки scheduler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    scheduler_instance.start()
+    yield
+    # Shutdown
+    scheduler_instance.stop()
+
+
+app = FastAPI(
+    title="Napoleon Tseh WhatsApp Service",
+    lifespan=lifespan
+)
 
 # Get Green API base URL from environment variables
 GREEN_API_BASE_URL = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
@@ -303,6 +319,18 @@ async def get_daily_report_quick(
             status_code=500,
             detail=f"Failed to generate report: {str(e)}"
         )
+
+
+@app.get("/scheduler/status")
+async def get_scheduler_status():
+    """
+    Get scheduler status and configuration
+    
+    Returns:
+        Scheduler status including next run time
+    """
+    return scheduler_instance.get_status()
+
 
 if __name__ == "__main__":
     import uvicorn
