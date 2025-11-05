@@ -186,19 +186,134 @@ def publish_to_rabbitmq(message: dict):
         print(f"Error publishing to RabbitMQ: {e}")
         return False
 
+
+def publish_to_ai_agent_queue(message: dict):
+    """Publish message to AI agent interactions queue"""
+    try:
+        credentials = pika.PlainCredentials(
+            os.getenv("RABBITMQ_USER", "guest"),
+            os.getenv("RABBITMQ_PASSWORD", "guest")
+        )
+        parameters = pika.ConnectionParameters(
+            host=RABBITMQ_HOST,
+            port=int(os.getenv("RABBITMQ_PORT", "5672")),
+            credentials=credentials
+        )
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        
+        ai_queue = "ai_agent_interactions"
+        channel.queue_declare(queue=ai_queue, durable=True)
+        
+        channel.basic_publish(
+            exchange='',
+            routing_key=ai_queue,
+            body=json.dumps(message),
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+            )
+        )
+        
+        connection.close()
+        return True
+    except Exception as e:
+        print(f"Error publishing to AI agent queue: {e}")
+        return False
+
+
+def determine_message_type(notification_data: dict) -> str:
+    """
+    Determine if message is from manager (for order processing) or client (for AI agent).
+    
+    Returns:
+        "manager" - route to order_processing queue (existing flow)
+        "client" - route to ai_agent_interactions queue (new AI agent)
+    """
+    try:
+        # Green API может присылать данные либо в body, либо на верхнем уровне
+        type_webhook = notification_data.get("typeWebhook", "")
+        
+        # Only process incoming text messages
+        if type_webhook != "incomingMessageReceived":
+            return "manager"  # Default to manager for non-message webhooks
+        
+        message_data = notification_data.get("messageData", {})
+        type_message = message_data.get("typeMessage", "")
+        
+        if type_message != "textMessage":
+            return "manager"  # Non-text messages go to manager
+        
+        # Get chat_id to identify sender
+        sender_data = notification_data.get("senderData", {})
+        chat_id = sender_data.get("chatId", "")
+        
+        print(f"[DEBUG] chat_id from message: {chat_id}")
+        
+        # Define manager chat IDs (these should be in environment variables)
+        manager_chat_ids = os.getenv("MANAGER_CHAT_IDS", "").split(",")
+        manager_chat_ids = [cid.strip() for cid in manager_chat_ids if cid.strip()]
+        
+        print(f"[DEBUG] Manager chat IDs from env: {manager_chat_ids}")
+        
+        # If from manager, route to existing order processing
+        if chat_id in manager_chat_ids:
+            print(f"[DEBUG] Match found - routing to MANAGER")
+            return "manager"
+        
+        # Otherwise, it's from a client - route to AI agent
+        print(f"[DEBUG] No match - routing to CLIENT (AI agent)")
+        return "client"
+        
+    except Exception as e:
+        print(f"Error determining message type: {e}")
+        return "manager"  # Default to manager on error
+
 @app.post("/receiveNotification")
 async def receive_notification(request: Request):
     """
-    Endpoint to receive notifications from WhatsApp Green API
+    Endpoint to receive notifications from WhatsApp Green API.
+    Routes messages to appropriate queue based on sender.
     """
     try:
         notification_data = await request.json()
         
-        # Публикуем в RabbitMQ
-        if publish_to_rabbitmq(notification_data):
-            return {"status": "queued", "message": "Notification sent to processing queue"}
+        # Determine message type and route accordingly
+        message_type = determine_message_type(notification_data)
+        
+        print(f"[ROUTING] Message type determined: {message_type}")
+        print(f"[ROUTING] Notification data: {json.dumps(notification_data, indent=2)}")
+        
+        if message_type == "client":
+            # Extract message data for AI agent
+            message_data = notification_data.get("messageData", {})
+            sender_data = notification_data.get("senderData", {})
+            
+            ai_message = {
+                "chat_id": sender_data.get("chatId", ""),
+                "sender_name": sender_data.get("senderName", ""),
+                "text": message_data.get("textMessageData", {}).get("textMessage", ""),
+                "timestamp": notification_data.get("timestamp"),
+                "raw_data": notification_data
+            }
+            
+            if publish_to_ai_agent_queue(ai_message):
+                return {
+                    "status": "queued",
+                    "message": "Client message sent to AI agent",
+                    "route": "ai_agent"
+                }
+            else:
+                raise HTTPException(status_code=500, detail="Failed to queue AI agent message")
         else:
-            raise HTTPException(status_code=500, detail="Failed to queue message")
+            # Manager message - use existing flow
+            if publish_to_rabbitmq(notification_data):
+                return {
+                    "status": "queued",
+                    "message": "Manager message sent to processing queue",
+                    "route": "order_processing"
+                }
+            else:
+                raise HTTPException(status_code=500, detail="Failed to queue message")
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

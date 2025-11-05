@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, Integer, String, DateTime, Text, Index, Boolean, Date, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Text, Index, Boolean, Date, UniqueConstraint, ForeignKey, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
@@ -123,3 +124,72 @@ class OutgoingMessageStatus(Base):
     send_by_api = Column(Boolean)
     timestamp = Column(DateTime(timezone=True))
     raw_data = Column(JSONB)
+
+
+class Conversation(Base):
+    """SQLAlchemy model for AI agent conversations"""
+    __tablename__ = "conversations"
+    
+    id = Column(Integer, primary_key=True)
+    chat_id = Column(String, nullable=False, index=True)
+    sender_name = Column(String)
+    sender_phone = Column(String)
+    status = Column(String, nullable=False, index=True)  # active, completed, abandoned
+    current_step = Column(String)  # current node in graph
+    created_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    
+    # Relationships
+    messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete-orphan")
+    ai_orders = relationship("AIGeneratedOrder", back_populates="conversation", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Conversation(id={self.id}, chat_id={self.chat_id}, status={self.status})>"
+
+
+class ConversationMessage(Base):
+    """SQLAlchemy model for conversation messages"""
+    __tablename__ = "conversation_messages"
+    
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
+    role = Column(String, nullable=False)  # user, assistant, system
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default='now()', nullable=False, index=True)
+    message_metadata = Column(JSONB)
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+    
+    def __repr__(self):
+        return f"<ConversationMessage(id={self.id}, role={self.role}, conversation_id={self.conversation_id})>"
+
+
+class AIGeneratedOrder(Base):
+    """SQLAlchemy model for AI-generated orders"""
+    __tablename__ = "ai_generated_orders"
+    
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey('orders.id', ondelete='SET NULL'))
+    chat_id = Column(String, nullable=False, index=True)
+    client_name = Column(String)
+    client_phone = Column(String)
+    additional_phone = Column(String)
+    items = Column(JSONB, nullable=False)
+    estimated_delivery_datetime = Column(DateTime(timezone=True))
+    delivery_address = Column(String)
+    payment_status = Column(String)
+    total_amount = Column(Numeric(10, 2))
+    notes = Column(Text)
+    validation_status = Column(String, nullable=False, index=True)  # pending, validated, rejected
+    created_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
+    confirmed_at = Column(DateTime(timezone=True))
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="ai_orders")
+    
+    def __repr__(self):
+        return f"<AIGeneratedOrder(id={self.id}, conversation_id={self.conversation_id}, validation_status={self.validation_status})>"
+
