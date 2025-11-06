@@ -5,15 +5,20 @@
 Add these variables to your `.env` file for AI agent functionality:
 
 ```bash
-# AI Agent Configuration
+# Message Routing Configuration
 # Comma-separated list of chat IDs that should be treated as managers
 # Messages from these chats will go to order processing (existing flow)
-# Messages from other chats will go to AI agent (new conversational flow)
-MANAGER_CHAT_IDS=79001234567@c.us,79009876543@c.us
+MANAGER_CHAT_IDS=77028639438@c.us
+
+# AI Agent Whitelist (for testing)
+# Only messages from these chat IDs will be handled by AI agent
+# Messages from other chats will be ignored (routed to manager queue but not processed)
+AI_AGENT_CHAT_IDS=77006458263@c.us,77001234567@c.us
 
 # Green API configuration (if not already set)
-GREEN_API_URL=https://api.green-api.com/waInstance{YOUR_INSTANCE}/
-GREEN_API_TOKEN=your_token_here
+GREENAPI_INSTANCE=7105362159
+GREENAPI_TOKEN=your_token_here
+GREENAPI_BASE_URL=https://api.green-api.com
 ```
 
 ## Database Migration
@@ -55,9 +60,28 @@ python app/ai_agent_worker.py
 
 ## Testing the System
 
-1. **Manager Flow (Existing)**: Messages from chat IDs listed in `MANAGER_CHAT_IDS` will continue to use the existing order processing flow
+### Message Routing Logic:
 
-2. **Client Flow (New AI Agent)**: Messages from any other chat ID will be handled by the AI agent for conversational order taking
+1. **Manager Messages** (`MANAGER_CHAT_IDS`): Routed to order processing queue (existing flow)
+
+2. **AI Agent Messages** (`AI_AGENT_CHAT_IDS`): Routed to AI agent for conversational order taking
+
+3. **Other Messages**: Ignored (routed to manager queue but not processed)
+
+### Testing:
+
+**Test 1 - Manager Message:**
+- Send from chat ID in `MANAGER_CHAT_IDS`
+- Should go to `rabbitmq_worker.py` → `order_processor_worker.py` → Order table
+
+**Test 2 - AI Agent Message:**
+- Send from chat ID in `AI_AGENT_CHAT_IDS`
+- Should go to `ai_agent_worker.py` → LangGraph → Conversation table
+- AI should respond in WhatsApp
+
+**Test 3 - Unknown Chat:**
+- Send from chat ID NOT in either list
+- Should be ignored (no processing, no AI response)
 
 ## Architecture
 

@@ -249,20 +249,30 @@ def determine_message_type(notification_data: dict) -> str:
         
         print(f"[DEBUG] chat_id from message: {chat_id}")
         
-        # Define manager chat IDs (these should be in environment variables)
+        # Define manager chat IDs
         manager_chat_ids = os.getenv("MANAGER_CHAT_IDS", "").split(",")
         manager_chat_ids = [cid.strip() for cid in manager_chat_ids if cid.strip()]
         
-        print(f"[DEBUG] Manager chat IDs from env: {manager_chat_ids}")
+        # Define AI agent whitelist (for testing)
+        ai_agent_chat_ids = os.getenv("AI_AGENT_CHAT_IDS", "").split(",")
+        ai_agent_chat_ids = [cid.strip() for cid in ai_agent_chat_ids if cid.strip()]
+        
+        print(f"[DEBUG] Manager chat IDs: {manager_chat_ids}")
+        print(f"[DEBUG] AI Agent whitelist: {ai_agent_chat_ids}")
         
         # If from manager, route to existing order processing
         if chat_id in manager_chat_ids:
-            print(f"[DEBUG] Match found - routing to MANAGER")
+            print(f"[DEBUG] Manager detected - routing to ORDER PROCESSING")
             return "manager"
         
-        # Otherwise, it's from a client - route to AI agent
-        print(f"[DEBUG] No match - routing to CLIENT (AI agent)")
-        return "client"
+        # If in AI agent whitelist, route to AI agent
+        if chat_id in ai_agent_chat_ids:
+            print(f"[DEBUG] AI whitelist match - routing to AI AGENT")
+            return "client"
+        
+        # Otherwise, default to manager (ignore unknown chats)
+        print(f"[DEBUG] Unknown chat - routing to MANAGER (ignored)")
+        return "manager"
         
     except Exception as e:
         print(f"Error determining message type: {e}")

@@ -39,7 +39,7 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 QUEUE_NAME = "ai_agent_interactions"
 
 # Green API credentials
-GREEN_API_BASE_URL = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
+GREENAPI_BASE_URL = os.getenv("GREENAPI_BASE_URL", "https://api.green-api.com")
 GREENAPI_INSTANCE = os.getenv("GREENAPI_INSTANCE")
 GREENAPI_TOKEN = os.getenv("GREENAPI_TOKEN")
 
@@ -185,7 +185,7 @@ async def send_whatsapp_message(chat_id: str, message: str):
         logger.error("GREENAPI_INSTANCE or GREENAPI_TOKEN not configured")
         return
     
-    url = f"{GREEN_API_BASE_URL}/waInstance{GREENAPI_INSTANCE}/sendMessage/{GREENAPI_TOKEN}"
+    url = f"{GREENAPI_BASE_URL}/waInstance{GREENAPI_INSTANCE}/sendMessage/{GREENAPI_TOKEN}"
     
     payload = {
         "chatId": chat_id,
