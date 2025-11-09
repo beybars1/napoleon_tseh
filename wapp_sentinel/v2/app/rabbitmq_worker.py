@@ -91,6 +91,14 @@ def save_event_to_db(notification_data):
             text = msg.text
             
         elif type_webhook == "incomingMessageReceived":
+            # Extract text from either textMessage or extendedTextMessage
+            message_data = notification_data.get('messageData', {})
+            text_message = ""
+            if "textMessageData" in message_data:
+                text_message = message_data.get("textMessageData", {}).get("textMessage")
+            elif "extendedTextMessageData" in message_data:
+                text_message = message_data.get("extendedTextMessageData", {}).get("text")
+            
             msg = IncomingMessage(
                 receipt_id=notification_data.get('receiptId'),
                 id_message=notification_data.get('idMessage'),
@@ -101,7 +109,7 @@ def save_event_to_db(notification_data):
                 sender_name=notification_data.get('senderData', {}).get('senderName'),
                 sender_contact_name=notification_data.get('senderData', {}).get('senderContactName'),
                 type_message=notification_data.get('messageData', {}).get('typeMessage'),
-                text_message=notification_data.get('messageData', {}).get('textMessageData', {}).get('textMessage'),
+                text_message=text_message,
                 type_webhook=notification_data.get('typeWebhook'),
                 raw_data=notification_data
             )

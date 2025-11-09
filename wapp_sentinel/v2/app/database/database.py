@@ -1,7 +1,11 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+import os
+from dotenv import load_dotenv
 
-DATABASE_URL = "postgresql://admin:admin@localhost:5411/napoleon-sentinel-db"
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:admin@localhost:5432/napoleon-sentinel-db")
 
 engine = create_engine(DATABASE_URL)
 

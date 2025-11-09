@@ -240,7 +240,8 @@ def determine_message_type(notification_data: dict) -> str:
         message_data = notification_data.get("messageData", {})
         type_message = message_data.get("typeMessage", "")
         
-        if type_message != "textMessage":
+        # Accept both textMessage and extendedTextMessage (with links, quotes, etc.)
+        if type_message not in ["textMessage", "extendedTextMessage"]:
             return "manager"  # Non-text messages go to manager
         
         # Get chat_id to identify sender
@@ -298,10 +299,17 @@ async def receive_notification(request: Request):
             message_data = notification_data.get("messageData", {})
             sender_data = notification_data.get("senderData", {})
             
+            # Extract text from either textMessage or extendedTextMessage
+            text = ""
+            if "textMessageData" in message_data:
+                text = message_data.get("textMessageData", {}).get("textMessage", "")
+            elif "extendedTextMessageData" in message_data:
+                text = message_data.get("extendedTextMessageData", {}).get("text", "")
+            
             ai_message = {
                 "chat_id": sender_data.get("chatId", ""),
                 "sender_name": sender_data.get("senderName", ""),
-                "text": message_data.get("textMessageData", {}).get("textMessage", ""),
+                "text": text,
                 "timestamp": notification_data.get("timestamp"),
                 "raw_data": notification_data
             }

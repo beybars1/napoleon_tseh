@@ -1,22 +1,32 @@
 # Napoleon Tseh - WhatsApp Sentinel v2
 
-**Автоматизированная система обработки заказов через WhatsApp с AI-парсингом и автоматической отчетностью**
+**Автоматизированная система обработки заказов через WhatsApp с AI-агентами и аналитикой**
 
 ## 🎯 Описание проекта
 
-Napoleon Tseh WhatsApp Sentinel - это комплексная система для автоматизации приема, обработки и учета заказов кондитерской через WhatsApp мессенджер. Система использует искусственный интеллект (OpenAI GPT) для извлечения структурированной информации из неформализованных сообщений и автоматически генерирует ежедневные отчеты.
+Napoleon Tseh WhatsApp Sentinel - это комплексная система для автоматизации приема, обработки и учета заказов кондитерской через WhatsApp мессенджер. Система использует искусственный интеллект (OpenAI GPT-4 + LangGraph) для разговорного приема заказов и обработки исторических данных, автоматически генерирует ежедневные отчеты.
 
 ## ✨ Основные возможности
 
-### 🤖 Умная обработка сообщений
-- **Webhook интеграция** с Green API для приема сообщений из WhatsApp
-- **AI-парсинг** заказов с помощью OpenAI GPT-4
-- Извлечение информации:
-  - 📅 Дата и время доставки
-  - 💳 Статус оплаты
-  - 👤 Имя клиента
-  - 📱 Контактные номера
-  - 📦 Список товаров с количеством
+### 🤖 AI-агенты для обработки
+
+#### **AI Agent Worker (LangGraph)**
+- **Разговорный прием заказов** через WhatsApp
+- Контекстное ведение диалога с клиентом
+- Пошаговый сбор информации:
+  - � Позиции заказа (название, количество)
+  - �📅 Дата и время доставки
+  - � Адрес доставки
+  - 💳 Способ оплаты
+  - 👤 Контактная информация
+- Подтверждение заказа перед сохранением
+- Whitelist для тестирования
+
+#### **Aggregation Worker (OpenAI)**
+- **AI-парсинг** исторических заказов
+- Обработка неструктурированных сообщений
+- Извлечение информации из текста
+- Автоматическая категоризация
 
 ### 📊 Автоматические отчеты
 - **Ежедневная рассылка** отчетов по расписанию
@@ -25,66 +35,80 @@ Napoleon Tseh WhatsApp Sentinel - это комплексная система �
 - Сортировка заказов по времени доставки
 - API endpoints для ручной отправки
 
-### 🔄 Асинхронная архитектура
+### 🔄 Микросервисная архитектура
 - **RabbitMQ** для надежной очереди сообщений
-- Два специализированных worker'а:
-  - Обработка входящих сообщений
-  - AI-анализ и сохранение заказов
+- Три специализированных worker'а:
+  - **Message Worker** - сохранение всех событий Green API
+  - **AI Agent Worker** - разговорный прием заказов (LangGraph)
+  - **Aggregation Worker** - обработка исторических заказов (OpenAI)
 - Масштабируемая и отказоустойчивая система
+- Docker контейнеризация
 
 ### 💾 Надежное хранение
 - **PostgreSQL** база данных
 - Полная история всех сообщений и заказов
+- Таблицы для конверсаций и AI-генерированных заказов
 - Миграции через Alembic
 - Индексы для быстрого поиска
 
 ## 🏗️ Архитектура системы
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        WhatsApp (Green API)                      │
-└────────────────────────────┬────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                     WhatsApp (Green API)                         │
+└────────────────────────────┬─────────────────────────────────────┘
                              │
                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   FastAPI (main.py)                              │
+┌──────────────────────────────────────────────────────────────────┐
+│                     FastAPI API (:8000)                          │
 │  • Webhook endpoint /receiveNotification                         │
+│  • Message routing (manager vs AI agent vs unknown)              │
 │  • API endpoints для отчетов                                     │
 │  • APScheduler для автоматической отправки                       │
-└────────────────────────────┬────────────────────────────────────┘
+└────────────────────────────┬─────────────────────────────────────┘
                              │
                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      RabbitMQ Queue                              │
-│  • greenapi_notifications - входящие сообщения                   │
-│  • order_processing - заказы для AI обработки                    │
-└──────────────┬──────────────────────────┬───────────────────────┘
-               │                          │
-               ▼                          ▼
-┌──────────────────────────┐   ┌─────────────────────────────────┐
-│  rabbitmq_worker.py      │   │  order_processor_worker.py      │
-│  • Сохраняет сообщения   │   │  • Отправляет в OpenAI          │
-│  • Фильтрует заказы      │   │  • Парсит структуру заказа      │
-│  • Пересылает в AI очередь│  │  • Сохраняет в таблицу orders   │
-└──────────────┬───────────┘   └─────────────┬───────────────────┘
-               │                              │
-               └──────────────┬───────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         RabbitMQ Queues                          │
+│  • napoleon_message_queue - все события Green API                │
+│  • ai_agent_interactions - сообщения для AI агента               │
+│  • incoming_interactions - исторические заказы                   │
+│  • order_processing - заказы для агрегации                       │
+└──────┬───────────────────────┬──────────────────┬────────────────┘
+       │                       │                  │
+       ▼                       ▼                  ▼
+┌─────────────────┐  ┌──────────────────┐  ┌────────────────────┐
+│ Message Worker  │  │ AI Agent Worker  │  │ Aggregation Worker │
+│                 │  │                  │  │                    │
+│ • Сохраняет все │  │ • LangGraph FSM  │  │ • OpenAI парсинг  │
+│   события в БД  │  │ • Диалог с       │  │ • Обработка       │
+│ • Публикует в   │  │   клиентом       │  │   исторических    │
+│   order_proc.   │  │ • Сбор инфо о    │  │   заказов         │
+│   queue         │  │   заказе         │  │ • Сохранение в    │
+│                 │  │ • Валидация      │  │   таблицу orders  │
+│                 │  │ • Подтверждение  │  │                    │
+└────────┬────────┘  └────────┬─────────┘  └──────────┬─────────┘
+         │                    │                       │
+         └────────────────────┼───────────────────────┘
                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    PostgreSQL Database                           │
+┌──────────────────────────────────────────────────────────────────┐
+│                      PostgreSQL Database                         │
 │  • incoming_message - входящие сообщения                         │
 │  • outgoing_message - исходящие сообщения                        │
 │  • outgoing_api_message - сообщения через API                    │
-│  • orders - структурированные заказы                             │
-└─────────────────────────────────────────────────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              Daily Report Service + Scheduler                    │
+│  • conversations - диалоги AI агента                             │
+│  • conversation_messages - сообщения в диалогах                  │
+│  • ai_generated_orders - заказы от AI агента                     │
+│  • orders - обработанные заказы (исторические)                   │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│               Daily Report Service + Scheduler                   │
 │  • Генерация отчетов за день                                     │
-│  • Автоматическая отправка по расписанию                         │
-│  • Отправка в WhatsApp чат                                       │
-└─────────────────────────────────────────────────────────────────┘
+│  • Автоматическая отправка по расписанию (00:30)                 │
+│  • Отправка в WhatsApp чат менеджера                             │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🚀 Быстрый старт
@@ -96,43 +120,69 @@ Napoleon Tseh WhatsApp Sentinel - это комплексная система �
 - Green API аккаунт
 - OpenAI API ключ
 
-### Установка
+### 🐳 Запуск через Docker (рекомендуется)
 
-1. **Клонируйте репозиторий:**
-```bash
-cd /home/beybars/dev_python/napoleon_tseh/wapp_sentinel/v2
-```
-
-2. **Установите зависимости:**
-```bash
-pip install -r requirements.txt
-```
-
-3. **Настройте переменные окружения:**
+1. **Настройте переменные окружения:**
 ```bash
 cp .env.example .env
-# Отредактируйте .env файл
+nano .env  # Отредактируйте .env файл
 ```
 
-4. **Запустите Docker контейнеры:**
+Обязательные переменные:
+```env
+GREENAPI_INSTANCE=your_instance
+GREENAPI_TOKEN=your_token
+OPENAI_API_KEY=your_openai_key
+MANAGER_CHAT_IDS=77028639438@c.us
+AI_AGENT_CHAT_IDS=77006458263@c.us
+```
+
+2. **Запустите все сервисы:**
 ```bash
 docker compose up -d
 ```
 
-5. **Примените миграции:**
+3. **Примените миграции:**
+```bash
+docker compose exec api alembic upgrade head
+```
+
+4. **Проверьте статус:**
+```bash
+./health_check.sh
+# или
+docker compose ps
+```
+
+### 💻 Локальный запуск (для разработки)
+
+1. **Установите зависимости:**
+```bash
+pip install -r requirements.txt
+```
+
+2. **Запустите инфраструктуру (PostgreSQL + RabbitMQ):**
+```bash
+docker compose up -d postgres rabbitmq
+```
+
+3. **Примените миграции:**
 ```bash
 alembic upgrade head
 ```
 
-6. **Запустите сервисы:**
+4. **Запустите сервисы в отдельных терминалах:**
 ```bash
 # Терминал 1: FastAPI
-python app/main.py
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Терминал 2: RabbitMQ Worker
+# Терминал 2: Message Worker
 python app/rabbitmq_worker.py
 
-# Терминал 3: Order Processor Worker
+# Терминал 3: AI Agent Worker
+python app/ai_agent_worker.py
+
+# Терминал 4: Aggregation Worker
 python app/order_processor_worker.py
 ```
 
@@ -144,14 +194,14 @@ python app/order_processor_worker.py
 # Green API
 GREENAPI_INSTANCE=your_instance_id
 GREENAPI_TOKEN=your_token
-GREEN_API_BASE_URL=https://api.green-api.com
+GREEN_API_BASE_URL=https://api.greenapi.com/waInstance
 
 # RabbitMQ
 RABBITMQ_HOST=localhost
 RABBITMQ_PORT=5672
 RABBITMQ_USER=guest
 RABBITMQ_PASSWORD=guest
-RABBITMQ_QUEUE=greenapi_notifications
+RABBITMQ_QUEUE=napoleon_message_queue
 ORDER_PROCESSING_QUEUE=order_processing
 
 # OpenAI
@@ -159,20 +209,29 @@ OPENAI_API_KEY=your_openai_key
 OPENAI_MODEL=gpt-4o-mini
 
 # PostgreSQL
-POSTGRES_USER=admin
-POSTGRES_PASSWORD=admin
-POSTGRES_DB=napoleon-sentinel-db
-DATABASE_URL=postgresql://admin:admin@localhost:5432/napoleon-sentinel-db
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=napoleon_db
+DATABASE_URL=postgresql://postgres:postgres@localhost:5411/napoleon_db
+
+# Chat IDs for routing
+MANAGER_CHAT_IDS=77028639438@c.us
+AI_AGENT_CHAT_IDS=77006458263@c.us
 
 # Scheduler
 SCHEDULER_ENABLED=true
-DAILY_REPORT_TIME=08:00
-DAILY_REPORT_CHAT_ID=your_chat_id@g.us
+DAILY_REPORT_TIME=00:30
+DAILY_REPORT_CHAT_ID=77028639438@c.us
 DAILY_REPORT_TIMEZONE=Asia/Almaty
-
-# Target Chat (для фильтрации)
-TARGET_CHAT_ID=120363403664602093@g.us
 ```
+
+### Маршрутизация сообщений
+
+Система автоматически определяет тип обработки на основе chat_id:
+
+- **MANAGER_CHAT_IDS** - сообщения от менеджера (сохраняются в БД, не обрабатываются)
+- **AI_AGENT_CHAT_IDS** - сообщения для AI агента (разговорный прием заказов)
+- **Прочие** - игнорируются (безопасность)
 
 ## 🔌 API Endpoints
 
@@ -196,20 +255,33 @@ TARGET_CHAT_ID=120363403664602093@g.us
 ```
 wapp_sentinel/v2/
 ├── app/
-│   ├── main.py                    # FastAPI приложение
+│   ├── main.py                    # FastAPI приложение + routing
 │   ├── scheduler.py               # APScheduler для автоматических задач
-│   ├── rabbitmq_worker.py         # Worker для обработки сообщений
-│   ├── order_processor_worker.py  # Worker для AI-парсинга заказов
+│   ├── rabbitmq_worker.py         # Message Worker (сохранение событий)
+│   ├── ai_agent_worker.py         # AI Agent Worker (LangGraph диалоги)
+│   ├── order_processor_worker.py  # Aggregation Worker (OpenAI парсинг)
+│   ├── agents/
+│   │   ├── state.py               # OrderState TypedDict
+│   │   ├── nodes.py               # LangGraph узлы
+│   │   └── order_graph.py         # LangGraph workflow
 │   ├── database/
 │   │   ├── database.py            # SQLAlchemy setup
-│   │   └── models.py              # Модели БД
+│   │   └── models.py              # Модели БД (+ conversations, ai_orders)
 │   ├── services/
 │   │   ├── openai_service.py      # OpenAI интеграция
 │   │   └── daily_report_service.py # Генерация отчетов
 │   └── processors/
-│       └── diagnose.py            # Утилиты диагностики
+│       ├── diagnose.py            # Утилиты диагностики
+│       └── process_historical_orders.py # Обработка истории
 ├── migrations/                    # Alembic миграции
-├── docker-compose.yaml            # Docker services
+├── Dockerfile.api                 # Docker для API
+├── Dockerfile.message_worker      # Docker для Message Worker
+├── Dockerfile.ai_agent_worker     # Docker для AI Agent Worker
+├── Dockerfile.aggregation_worker  # Docker для Aggregation Worker
+├── docker-compose.yml             # Docker Compose конфигурация
+├── docker-compose.prod.yml        # Production overrides
+├── Makefile                       # Удобные команды
+├── health_check.sh               # Скрипт проверки здоровья
 ├── requirements.txt               # Python зависимости
 ├── alembic.ini                    # Alembic конфигурация
 ├── .env                           # Переменные окружения
@@ -218,23 +290,74 @@ wapp_sentinel/v2/
 
 ## 🐳 Docker Services
 
+### Development (docker-compose.yml)
 ```yaml
 services:
-  postgres:      # PostgreSQL база данных
-  rabbitmq:      # RabbitMQ message broker
+  postgres:            # PostgreSQL база данных (порт 5411)
+  rabbitmq:            # RabbitMQ message broker (5672, 15672)
+  api:                 # FastAPI application (порт 8000)
+  message_worker:      # Сохранение всех событий Green API
+  ai_agent_worker:     # Разговорный прием заказов (LangGraph)
+  aggregation_worker:  # Обработка исторических заказов (OpenAI)
 ```
 
-## 🔄 Жизненный цикл заказа
+### Команды управления (Makefile)
+```bash
+make up              # Запустить все сервисы
+make down            # Остановить все сервисы
+make logs            # Смотреть все логи
+make logs-api        # Логи API
+make logs-message    # Логи Message Worker
+make logs-ai         # Логи AI Agent Worker
+make logs-aggregation # Логи Aggregation Worker
+make restart         # Перезапустить все
+make migrate         # Применить миграции
+make shell           # Bash в API контейнере
+make db-shell        # PostgreSQL shell
+make ps              # Статус контейнеров
+```
 
-1. **Менеджер отправляет сообщение** в WhatsApp чат
-2. **Green API webhook** отправляет уведомление в FastAPI
-3. **FastAPI публикует** сообщение в RabbitMQ очередь
-4. **rabbitmq_worker** сохраняет сообщение в БД
-5. **rabbitmq_worker** фильтрует заказы и отправляет в AI очередь
-6. **order_processor_worker** получает сообщение из AI очереди
-7. **OpenAI парсит** текст и извлекает структурированные данные
-8. **order_processor_worker** сохраняет заказ в таблицу `orders`
-9. **Scheduler** автоматически собирает заказы и отправляет отчет
+## 🔄 Жизненный цикл обработки
+
+### Вариант 1: AI Agent (новые заказы)
+
+1. **Клиент отправляет сообщение** в WhatsApp (из AI_AGENT_CHAT_IDS)
+2. **Green API webhook** → FastAPI `/receiveNotification`
+3. **FastAPI маршрутизация** → определяет тип = `client`
+4. **Публикация** в `ai_agent_interactions` очередь
+5. **AI Agent Worker** (LangGraph):
+   - Получает сообщение из очереди
+   - Загружает/создает состояние диалога
+   - Обрабатывает через граф состояний
+   - Собирает информацию о заказе пошагово
+   - Валидирует и подтверждает
+   - Сохраняет в `conversations`, `conversation_messages`, `ai_generated_orders`
+   - Отправляет ответы в WhatsApp через Green API
+
+### Вариант 2: Исторические заказы (менеджер)
+
+1. **Менеджер отправляет сообщение** в WhatsApp (из MANAGER_CHAT_IDS)
+2. **Green API webhook** → FastAPI `/receiveNotification`
+3. **FastAPI маршрутизация** → определяет тип = `manager`
+4. **Публикация** в `napoleon_message_queue` очередь
+5. **Message Worker**:
+   - Получает из `napoleon_message_queue`
+   - Сохраняет все события в БД (incoming_message, outgoing_message, etc.)
+   - Публикует в `order_processing` очередь
+6. **Aggregation Worker** (OpenAI):
+   - Получает из `order_processing` очереди
+   - Парсит текст с помощью OpenAI GPT-4
+   - Извлекает структурированные данные
+   - Сохраняет в таблицу `orders`
+
+### Вариант 3: Автоматические отчеты
+
+1. **APScheduler** запускает задачу в 00:30 (Asia/Almaty)
+2. **Daily Report Service**:
+   - Собирает заказы за прошедший день
+   - Генерирует красиво отформатированный отчет
+   - Отправляет в WhatsApp чат менеджера
+   - Статистика: количество заказов, оплаченные/неоплаченные
 
 ## 📊 Формат ежедневного отчета
 
@@ -273,53 +396,142 @@ services:
 
 ## 🛠️ Разработка
 
-### Запуск тестов
-```bash
-python test_daily_report.py
-```
-
 ### Создание новой миграции
 ```bash
+# Через Docker
+docker compose exec api alembic revision --autogenerate -m "description"
+docker compose exec api alembic upgrade head
+
+# Локально
 alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```
 
-### Проверка статуса
+### Тестирование
 ```bash
+# Тест daily report
+python test_daily_report.py
+
+# Проверка AI Agent
+# Отправьте сообщение с номера из AI_AGENT_CHAT_IDS
+```
+
+### Мониторинг
+```bash
+# Health check всех сервисов
+./health_check.sh
+
 # RabbitMQ Management UI
 http://localhost:15672
 # Login: guest / Password: guest
 
+# API Documentation
+http://localhost:8000/docs
+
 # Scheduler status
 curl http://localhost:8000/scheduler/status
+
+# Логи Docker
+docker compose logs -f
+docker compose logs -f ai_agent_worker
+docker compose logs -f message_worker
+docker compose logs -f aggregation_worker
 ```
 
 ## 🔧 Troubleshooting
 
-### RabbitMQ подключение
-Убедитесь что credentials в коде совпадают с docker-compose.yaml
-
-### OpenAI парсинг
-Проверьте что:
-- OPENAI_API_KEY корректный
-- Модель доступна (gpt-4o-mini)
-- Есть баланс на аккаунте
-
-### Scheduler не работает
+### AI Agent Worker не отвечает
 ```bash
-# Проверьте настройки
+# Проверьте логи
+docker compose logs -f ai_agent_worker
+
+# Убедитесь что:
+# 1. OPENAI_API_KEY установлен
+# 2. Chat ID есть в AI_AGENT_CHAT_IDS
+# 3. RabbitMQ очередь ai_agent_interactions создана
+# 4. Worker запущен и подключен к RabbitMQ
+
+# Проверьте очередь
+docker compose exec rabbitmq rabbitmqctl list_queues
+```
+
+### Message Worker не сохраняет события
+```bash
+# Проверьте логи
+docker compose logs -f message_worker
+
+# Проверьте подключение к БД
+docker compose exec message_worker python -c "from app.database.database import engine; engine.connect()"
+
+# Проверьте RabbitMQ
+docker compose exec rabbitmq rabbitmq-diagnostics ping
+```
+
+### Aggregation Worker не обрабатывает заказы
+```bash
+# Проверьте логи
+docker compose logs -f aggregation_worker
+
+# Проверьте OpenAI API ключ
+docker compose exec aggregation_worker python -c "import os; print(os.getenv('OPENAI_API_KEY'))"
+
+# Проверьте очередь
+docker compose exec rabbitmq rabbitmqctl list_queues | grep order_processing
+```
+
+### RabbitMQ подключение
+```bash
+# Проверьте что credentials совпадают в .env и docker-compose.yml
+# Проверьте доступность
+docker compose exec api ping -c 3 rabbitmq
+```
+
+### PostgreSQL подключение
+```bash
+# Проверьте статус
+docker compose exec postgres pg_isready
+
+# Проверьте порт (5411 вместо 5432)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5411/napoleon_db
+
+# Подключитесь к БД
+docker compose exec postgres psql -U postgres -d napoleon_db
+```
+
+### Scheduler не отправляет отчеты
+```bash
+# Проверьте настройки в .env
 SCHEDULER_ENABLED=true
-DAILY_REPORT_CHAT_ID=your_chat_id@g.us
+DAILY_REPORT_TIME=00:30
+DAILY_REPORT_CHAT_ID=77028639438@c.us
+DAILY_REPORT_TIMEZONE=Asia/Almaty
 
 # Проверьте статус
 curl http://localhost:8000/scheduler/status
+
+# Ручная отправка для теста
+curl -X POST http://localhost:8000/orders/send-daily-report
 ```
 
-## 📚 Дополнительная документация
+## 📚 Технологии
 
-- `SCHEDULER_README.md` - Подробно о планировщике
-- `DAILY_REPORT_API.md` - API для отчетов
-- `MIGRATION_GUIDE.md` - Руководство по миграции
+### Backend
+- **FastAPI** - современный веб-фреймворк
+- **SQLAlchemy** - ORM для работы с БД
+- **Alembic** - миграции базы данных
+- **Pika** - Python клиент для RabbitMQ
+- **APScheduler** - планировщик задач
+
+### AI & ML
+- **OpenAI GPT-4o-mini** - парсинг исторических заказов
+- **LangGraph** - граф состояний для AI агента
+- **LangChain** - интеграция с LLM
+
+### Infrastructure
+- **PostgreSQL 15** - реляционная БД
+- **RabbitMQ 3** - очереди сообщений
+- **Docker & Docker Compose** - контейнеризация
+- **Green API** - WhatsApp интеграция
 
 ## 🤝 Участие в разработке
 

@@ -439,9 +439,9 @@ $RECYCLE.BIN/
 .nfs*
 
 # Docker
-.dockerignore
-Dockerfile
-docker-compose.yml
+#.dockerignore
+#Dockerfile
+#docker-compose.yml
 docker-compose.yaml
 docker-compose.override.yml
 docker-compose.override.yaml
