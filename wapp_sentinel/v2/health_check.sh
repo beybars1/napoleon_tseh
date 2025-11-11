@@ -63,7 +63,7 @@ fi
 
 # Check RabbitMQ Worker
 echo -n "RabbitMQ Worker: "
-if docker-compose ps rabbitmq_worker | grep -q "Up"; then
+if docker-compose ps message_worker | grep -q "Up"; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ Not Running${NC}"
@@ -71,7 +71,7 @@ fi
 
 # Check Order Processor Worker
 echo -n "Order Processor Worker: "
-if docker-compose ps order_processor_worker | grep -q "Up"; then
+if docker-compose ps aggregation_worker | grep -q "Up"; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ Not Running${NC}"
