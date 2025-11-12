@@ -30,8 +30,11 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "napoleon_message_queue")
 ORDER_PROCESSING_QUEUE = os.getenv("ORDER_PROCESSING_QUEUE", "order_processing")
 TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "120363403664602093@g.us")
+RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
+RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials))
 channel = connection.channel()
 channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
 # Объявляем очередь для обработки заказов
