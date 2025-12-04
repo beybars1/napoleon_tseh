@@ -27,20 +27,20 @@ def get_timestamp(ts):
         return None
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "napoleon_message_queue")
-ORDER_PROCESSING_QUEUE = os.getenv("ORDER_PROCESSING_QUEUE", "order_processing")
+GREENAPI_QUEUE = os.getenv("GREENAPI_QUEUE", "greenapi_queue")
+ORDER_PROCESSOR_QUEUE = os.getenv("ORDER_PROCESSOR_QUEUE", "order_processor_queue")
 TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "120363403664602093@g.us")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
 credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
 channel = connection.channel()
-channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+channel.queue_declare(queue=GREENAPI_QUEUE, durable=True)
 # Объявляем очередь для обработки заказов
-channel.queue_declare(queue=ORDER_PROCESSING_QUEUE, durable=True)
+channel.queue_declare(queue=ORDER_PROCESSOR_QUEUE, durable=True)
 
-print(f"[*] Waiting for messages in queue '{RABBITMQ_QUEUE}'. To exit press CTRL+C")
+print(f"[*] Waiting for messages in queue '{GREENAPI_QUEUE}'. To exit press CTRL+C")
 
 def publish_to_order_queue(message_data: dict, table_name: str, message_id: int, timestamp: datetime, text: str, chat_id: str):
     """Publish message to order processing queue"""
@@ -56,13 +56,13 @@ def publish_to_order_queue(message_data: dict, table_name: str, message_id: int,
         
         channel.basic_publish(
             exchange='',
-            routing_key=ORDER_PROCESSING_QUEUE,
+            routing_key=ORDER_PROCESSOR_QUEUE,
             body=json.dumps(order_message),
             properties=pika.BasicProperties(
                 delivery_mode=2,  # persistent
             )
         )
-        print(f"[→] Published to order queue: message_id={message_id}, table={table_name}")
+        print(f"[→] Published to order processor queue: message_id={message_id}, table={table_name}")
         return True
     except Exception as e:
         print(f"[!] Error publishing to order queue: {e}")
@@ -184,6 +184,6 @@ def callback(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
 channel.basic_qos(prefetch_count=1)
-channel.basic_consume(queue=RABBITMQ_QUEUE, on_message_callback=callback)
+channel.basic_consume(queue=GREENAPI_QUEUE, on_message_callback=callback)
 
 channel.start_consuming()

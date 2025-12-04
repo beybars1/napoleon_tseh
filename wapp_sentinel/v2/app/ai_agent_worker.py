@@ -36,7 +36,7 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
-QUEUE_NAME = "ai_agent_interactions"
+AI_AGENT_QUEUE = os.getenv("AI_AGENT_QUEUE", "ai_agent_queue")
 
 # Green API credentials
 GREENAPI_BASE_URL = os.getenv("GREENAPI_BASE_URL", "https://api.green-api.com")
@@ -286,18 +286,18 @@ def main():
     channel = connection.channel()
     
     # Declare queue
-    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    channel.queue_declare(queue=AI_AGENT_QUEUE, durable=True)
     
     # Set QoS
     channel.basic_qos(prefetch_count=1)
     
     # Start consuming
     channel.basic_consume(
-        queue=QUEUE_NAME,
+        queue=AI_AGENT_QUEUE,
         on_message_callback=callback
     )
     
-    logger.info(f"Waiting for messages in queue: {QUEUE_NAME}")
+    logger.info(f"Waiting for messages in queue: {AI_AGENT_QUEUE}")
     logger.info("Press CTRL+C to exit")
     
     try:

@@ -22,7 +22,7 @@ Napoleon Tseh WhatsApp Sentinel - это комплексная система �
 - Подтверждение заказа перед сохранением
 - Whitelist для тестирования
 
-#### **Aggregation Worker (OpenAI)**
+#### **Order Processor Worker (OpenAI)**
 - **AI-парсинг** исторических заказов
 - Обработка неструктурированных сообщений
 - Извлечение информации из текста
@@ -38,9 +38,9 @@ Napoleon Tseh WhatsApp Sentinel - это комплексная система �
 ### 🔄 Микросервисная архитектура
 - **RabbitMQ** для надежной очереди сообщений
 - Три специализированных worker'а:
-  - **Message Worker** - сохранение всех событий Green API
+  - **Green API Worker** - сохранение всех событий Green API
   - **AI Agent Worker** - разговорный прием заказов (LangGraph)
-  - **Aggregation Worker** - обработка исторических заказов (OpenAI)
+  - **Order Processor Worker** - обработка исторических заказов (OpenAI)
 - Масштабируемая и отказоустойчивая система
 - Docker контейнеризация
 
@@ -70,24 +70,24 @@ Napoleon Tseh WhatsApp Sentinel - это комплексная система �
                              ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                         RabbitMQ Queues                          │
-│  • napoleon_message_queue - все события Green API                │
-│  • ai_agent_interactions - сообщения для AI агента               │
+│  • greenapi_queue - все события Green API                │
+│  • ai_agent_queue - сообщения для AI агента               │
 │  • incoming_interactions - исторические заказы                   │
-│  • order_processing - заказы для агрегации                       │
+│  • order_processor_queue - заказы для агрегации                       │
 └──────┬───────────────────────┬──────────────────┬────────────────┘
        │                       │                  │
        ▼                       ▼                  ▼
-┌─────────────────┐  ┌──────────────────┐  ┌────────────────────┐
-│ Message Worker  │  │ AI Agent Worker  │  │ Aggregation Worker │
-│                 │  │                  │  │                    │
-│ • Сохраняет все │  │ • LangGraph FSM  │  │ • OpenAI парсинг  │
-│   события в БД  │  │ • Диалог с       │  │ • Обработка       │
-│ • Публикует в   │  │   клиентом       │  │   исторических    │
-│   order_proc.   │  │ • Сбор инфо о    │  │   заказов         │
-│   queue         │  │   заказе         │  │ • Сохранение в    │
-│                 │  │ • Валидация      │  │   таблицу orders  │
-│                 │  │ • Подтверждение  │  │                    │
-└────────┬────────┘  └────────┬─────────┘  └──────────┬─────────┘
+┌────────────────────┐  ┌──────────────────┐  ┌────────────────────────┐
+│ Green API Worker   │  │ AI Agent Worker  │  │ Order Processor Worker │
+│                    │  │                  │  │                        │
+│ • Сохраняет все    │  │ • LangGraph FSM  │  │ • OpenAI парсинг      │
+│   события в БД     │  │ • Диалог с       │  │ • Обработка           │
+│ • Публикует в      │  │   клиентом       │  │   исторических        │
+│   order_processor │  │ • Сбор инфо о    │  │   заказов             │
+│   queue            │  │   заказе         │  │ • Сохранение в        │
+│                    │  │ • Валидация      │  │   таблицу orders      │
+│                    │  │ • Подтверждение  │  │                        │
+└───────────┬────────┘  └────────┬─────────┘  └────────────┬───────────┘
          │                    │                       │
          └────────────────────┼───────────────────────┘
                               ▼
@@ -176,13 +176,13 @@ alembic upgrade head
 # Терминал 1: FastAPI
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Терминал 2: Message Worker
-python app/rabbitmq_worker.py
+# Терминал 2: Green API Worker
+python app/greenapi_worker.py
 
 # Терминал 3: AI Agent Worker
 python app/ai_agent_worker.py
 
-# Терминал 4: Aggregation Worker
+# Терминал 4: Order Processor Worker
 python app/order_processor_worker.py
 ```
 
@@ -201,8 +201,9 @@ RABBITMQ_HOST=localhost
 RABBITMQ_PORT=5672
 RABBITMQ_USER=guest
 RABBITMQ_PASSWORD=guest
-RABBITMQ_QUEUE=napoleon_message_queue
-ORDER_PROCESSING_QUEUE=order_processing
+GREENAPI_QUEUE=greenapi_queue
+ORDER_PROCESSOR_QUEUE=order_processor_queue
+AI_AGENT_QUEUE=ai_agent_queue
 
 # OpenAI
 OPENAI_API_KEY=your_openai_key
@@ -257,9 +258,9 @@ wapp_sentinel/v2/
 ├── app/
 │   ├── main.py                    # FastAPI приложение + routing
 │   ├── scheduler.py               # APScheduler для автоматических задач
-│   ├── rabbitmq_worker.py         # Message Worker (сохранение событий)
+│   ├── greenapi_worker.py         # Green API Worker (сохранение событий)
 │   ├── ai_agent_worker.py         # AI Agent Worker (LangGraph диалоги)
-│   ├── order_processor_worker.py  # Aggregation Worker (OpenAI парсинг)
+│   ├── order_processor_worker.py  # Order Processor Worker (OpenAI парсинг)
 │   ├── agents/
 │   │   ├── state.py               # OrderState TypedDict
 │   │   ├── nodes.py               # LangGraph узлы
@@ -275,9 +276,9 @@ wapp_sentinel/v2/
 │       └── process_historical_orders.py # Обработка истории
 ├── migrations/                    # Alembic миграции
 ├── Dockerfile.api                 # Docker для API
-├── Dockerfile.message_worker      # Docker для Message Worker
+├── Dockerfile.greenapi_worker      # Docker для Green API Worker
 ├── Dockerfile.ai_agent_worker     # Docker для AI Agent Worker
-├── Dockerfile.aggregation_worker  # Docker для Aggregation Worker
+├── Dockerfile.order_processor_worker  # Docker для Order Processor Worker
 ├── docker-compose.yml             # Docker Compose конфигурация
 ├── docker-compose.prod.yml        # Production overrides
 ├── Makefile                       # Удобные команды
@@ -296,9 +297,9 @@ services:
   postgres:            # PostgreSQL база данных (порт 5411)
   rabbitmq:            # RabbitMQ message broker (5672, 15672)
   api:                 # FastAPI application (порт 8000)
-  message_worker:      # Сохранение всех событий Green API
+  greenapi_worker:      # Сохранение всех событий Green API
   ai_agent_worker:     # Разговорный прием заказов (LangGraph)
-  aggregation_worker:  # Обработка исторических заказов (OpenAI)
+  order_processor_worker:  # Обработка исторических заказов (OpenAI)
 ```
 
 ### Команды управления (Makefile)
@@ -307,9 +308,9 @@ make up              # Запустить все сервисы
 make down            # Остановить все сервисы
 make logs            # Смотреть все логи
 make logs-api        # Логи API
-make logs-message    # Логи Message Worker
+make logs-message    # Логи Green API Worker
 make logs-ai         # Логи AI Agent Worker
-make logs-aggregation # Логи Aggregation Worker
+make logs-aggregation # Логи Order Processor Worker
 make restart         # Перезапустить все
 make migrate         # Применить миграции
 make shell           # Bash в API контейнере
@@ -324,7 +325,7 @@ make ps              # Статус контейнеров
 1. **Клиент отправляет сообщение** в WhatsApp (из AI_AGENT_CHAT_IDS)
 2. **Green API webhook** → FastAPI `/receiveNotification`
 3. **FastAPI маршрутизация** → определяет тип = `client`
-4. **Публикация** в `ai_agent_interactions` очередь
+4. **Публикация** в `ai_agent_queue` очередь
 5. **AI Agent Worker** (LangGraph):
    - Получает сообщение из очереди
    - Загружает/создает состояние диалога
@@ -339,13 +340,13 @@ make ps              # Статус контейнеров
 1. **Менеджер отправляет сообщение** в WhatsApp (из MANAGER_CHAT_IDS)
 2. **Green API webhook** → FastAPI `/receiveNotification`
 3. **FastAPI маршрутизация** → определяет тип = `manager`
-4. **Публикация** в `napoleon_message_queue` очередь
-5. **Message Worker**:
-   - Получает из `napoleon_message_queue`
+4. **Публикация** в `greenapi_queue` очередь
+5. **Green API Worker**:
+   - Получает из `greenapi_queue`
    - Сохраняет все события в БД (incoming_message, outgoing_message, etc.)
-   - Публикует в `order_processing` очередь
-6. **Aggregation Worker** (OpenAI):
-   - Получает из `order_processing` очереди
+   - Публикует в `order_processor_queue` очередь
+6. **Order Processor Worker** (OpenAI):
+   - Получает из `order_processor_queue` очереди
    - Парсит текст с помощью OpenAI GPT-4
    - Извлекает структурированные данные
    - Сохраняет в таблицу `orders`
@@ -434,8 +435,8 @@ curl http://localhost:8000/scheduler/status
 # Логи Docker
 docker compose logs -f
 docker compose logs -f ai_agent_worker
-docker compose logs -f message_worker
-docker compose logs -f aggregation_worker
+docker compose logs -f greenapi_worker
+docker compose logs -f order_processor_worker
 ```
 
 ## 🔧 Troubleshooting
@@ -448,35 +449,35 @@ docker compose logs -f ai_agent_worker
 # Убедитесь что:
 # 1. OPENAI_API_KEY установлен
 # 2. Chat ID есть в AI_AGENT_CHAT_IDS
-# 3. RabbitMQ очередь ai_agent_interactions создана
+# 3. RabbitMQ очередь ai_agent_queue создана
 # 4. Worker запущен и подключен к RabbitMQ
 
 # Проверьте очередь
 docker compose exec rabbitmq rabbitmqctl list_queues
 ```
 
-### Message Worker не сохраняет события
+### Green API Worker не сохраняет события
 ```bash
 # Проверьте логи
-docker compose logs -f message_worker
+docker compose logs -f greenapi_worker
 
 # Проверьте подключение к БД
-docker compose exec message_worker python -c "from app.database.database import engine; engine.connect()"
+docker compose exec greenapi_worker python -c "from app.database.database import engine; engine.connect()"
 
 # Проверьте RabbitMQ
 docker compose exec rabbitmq rabbitmq-diagnostics ping
 ```
 
-### Aggregation Worker не обрабатывает заказы
+### Order Processor Worker не обрабатывает заказы
 ```bash
 # Проверьте логи
-docker compose logs -f aggregation_worker
+docker compose logs -f order_processor_worker
 
 # Проверьте OpenAI API ключ
-docker compose exec aggregation_worker python -c "import os; print(os.getenv('OPENAI_API_KEY'))"
+docker compose exec order_processor_worker python -c "import os; print(os.getenv('OPENAI_API_KEY'))"
 
 # Проверьте очередь
-docker compose exec rabbitmq rabbitmqctl list_queues | grep order_processing
+docker compose exec rabbitmq rabbitmqctl list_queues | grep order_processor_queue
 ```
 
 ### RabbitMQ подключение

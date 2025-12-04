@@ -30,7 +30,7 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  rabbitmq_worker:
+  greenapi_worker:
     restart: always
     volumes: []  # Remove volume mounts for security
     deploy:

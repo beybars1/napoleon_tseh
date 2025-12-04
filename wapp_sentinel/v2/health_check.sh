@@ -61,9 +61,9 @@ else
     echo -e "${RED}✗ Not Running${NC}"
 fi
 
-# Check RabbitMQ Worker
-echo -n "RabbitMQ Worker: "
-if docker-compose ps message_worker | grep -q "Up"; then
+# Check Green API Worker
+echo -n "Green API Worker: "
+if docker-compose ps greenapi_worker | grep -q "Up"; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ Not Running${NC}"
@@ -71,7 +71,7 @@ fi
 
 # Check Order Processor Worker
 echo -n "Order Processor Worker: "
-if docker-compose ps aggregation_worker | grep -q "Up"; then
+if docker-compose ps order_processor_worker | grep -q "Up"; then
     echo -e "${GREEN}✓ Running${NC}"
 else
     echo -e "${RED}✗ Not Running${NC}"
@@ -80,7 +80,7 @@ fi
 echo ""
 echo "📊 RabbitMQ Queues:"
 echo "------------------"
-docker-compose exec -T rabbitmq rabbitmqctl list_queues name messages consumers 2>/dev/null | grep -E "(napoleon_message_queue|incoming_interactions|ai_agent_interactions|order_processing)" || echo "No queues found"
+docker-compose exec -T rabbitmq rabbitmqctl list_queues name messages consumers 2>/dev/null | grep -E "(greenapi_queue|incoming_interactions|ai_agent_queue|order_processor_queue)" || echo "No queues found"
 
 echo ""
 echo "💾 Database Connection:"

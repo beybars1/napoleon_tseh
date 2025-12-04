@@ -24,8 +24,8 @@ logs-api: ## View API logs
 logs-ai: ## View AI Agent logs
 	docker-compose logs -f ai_agent_worker
 
-logs-rabbitmq: ## View RabbitMQ Worker logs
-	docker-compose logs -f rabbitmq_worker
+logs-greenapi: ## View Green API Worker logs
+	docker-compose logs -f greenapi_worker
 
 logs-processor: ## View Order Processor logs
 	docker-compose logs -f order_processor_worker
@@ -39,8 +39,8 @@ restart-api: ## Restart API service
 restart-ai: ## Restart AI Agent
 	docker-compose restart ai_agent_worker
 
-restart-rabbitmq: ## Restart RabbitMQ Worker
-	docker-compose restart rabbitmq_worker
+restart-greenapi: ## Restart Green API Worker
+	docker-compose restart greenapi_worker
 
 restart-processor: ## Restart Order Processor
 	docker-compose restart order_processor_worker
@@ -63,8 +63,8 @@ shell: ## Open shell in API container
 shell-ai: ## Open shell in AI Agent container
 	docker-compose exec ai_agent_worker bash
 
-shell-rabbitmq: ## Open shell in RabbitMQ Worker container
-	docker-compose exec rabbitmq_worker bash
+shell-greenapi: ## Open shell in Green API Worker container
+	docker-compose exec greenapi_worker bash
 
 shell-processor: ## Open shell in Order Processor container
 	docker-compose exec order_processor_worker bash
@@ -94,9 +94,9 @@ rebuild-ai: ## Rebuild and restart AI Agent
 	docker-compose build ai_agent_worker
 	docker-compose up -d ai_agent_worker
 
-rebuild-rabbitmq: ## Rebuild and restart RabbitMQ Worker
-	docker-compose build rabbitmq_worker
-	docker-compose up -d rabbitmq_worker
+rebuild-greenapi: ## Rebuild and restart Green API Worker
+	docker-compose build greenapi_worker
+	docker-compose up -d greenapi_worker
 
 rebuild-processor: ## Rebuild and restart Order Processor
 	docker-compose build order_processor_worker

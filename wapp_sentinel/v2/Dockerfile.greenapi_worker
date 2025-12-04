@@ -1,4 +1,4 @@
-# Dockerfile for RabbitMQ Worker (Message Persistence)
+# Dockerfile for Green API Worker (Message Persistence)
 FROM python:3.10-slim
 
 # Set environment variables
@@ -28,5 +28,5 @@ RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Run RabbitMQ Worker
-CMD ["python", "app/rabbitmq_worker.py"]
+# Run Green API Worker
+CMD ["python", "app/greenapi_worker.py"]

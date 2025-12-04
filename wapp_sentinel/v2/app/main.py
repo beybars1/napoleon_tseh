@@ -37,7 +37,7 @@ app = FastAPI(
 # Get Green API base URL from environment variables
 GREEN_API_BASE_URL = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-RABBITMQ_QUEUE = os.getenv("RABBITMQ_QUEUE", "greenapi_notifications")
+GREENAPI_QUEUE = os.getenv("GREENAPI_QUEUE", "greenapi_queue")
 
 
 # Pydantic модель для валидации входящих данных
@@ -169,11 +169,11 @@ def publish_to_rabbitmq(message: dict):
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         
-        channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+        channel.queue_declare(queue=GREENAPI_QUEUE, durable=True)
         
         channel.basic_publish(
             exchange='',
-            routing_key=RABBITMQ_QUEUE,
+            routing_key=GREENAPI_QUEUE,
             body=json.dumps(message),
             properties=pika.BasicProperties(
                 delivery_mode=2,  # делаем сообщение persistent
@@ -202,7 +202,7 @@ def publish_to_ai_agent_queue(message: dict):
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         
-        ai_queue = "ai_agent_interactions"
+        ai_queue = os.getenv("AI_AGENT_QUEUE", "ai_agent_queue")
         channel.queue_declare(queue=ai_queue, durable=True)
         
         channel.basic_publish(
@@ -226,8 +226,8 @@ def determine_message_type(notification_data: dict) -> str:
     Determine if message is from manager (for order processing) or client (for AI agent).
     
     Returns:
-        "manager" - route to order_processing queue (existing flow)
-        "client" - route to ai_agent_interactions queue (new AI agent)
+        "manager" - route to greenapi_queue (existing flow)
+        "client" - route to ai_agent_queue (new AI agent)
     """
     try:
         # Green API может присылать данные либо в body, либо на верхнем уровне

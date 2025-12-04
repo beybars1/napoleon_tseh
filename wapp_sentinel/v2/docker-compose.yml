@@ -85,12 +85,12 @@ services:
       - napoleon_network
     restart: unless-stopped
 
-  # RabbitMQ Worker (Message Persistence)
-  message_worker:
+  # Green API Worker (Message Persistence)
+  greenapi_worker:
     build:
       context: .
-      dockerfile: Dockerfile.message_worker
-    container_name: napoleon_message_worker
+      dockerfile: Dockerfile.greenapi_worker
+    container_name: napoleon_greenapi_worker
     env_file:
       - .env
     depends_on:
@@ -108,11 +108,11 @@ services:
     restart: unless-stopped
 
   # Order Processor Worker
-  aggregation_worker:
+  order_processor_worker:
     build:
       context: .
-      dockerfile: Dockerfile.aggregation_worker
-    container_name: napoleon_aggregation_worker
+      dockerfile: Dockerfile.order_processor_worker
+    container_name: napoleon_order_processor_worker
     env_file:
       - .env
     depends_on:

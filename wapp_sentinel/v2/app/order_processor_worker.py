@@ -14,7 +14,7 @@ from app.database.models import Order, IncomingMessage, OutgoingMessage, Outgoin
 from app.services.openai_service import OpenAIOrderParser
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-ORDER_PROCESSING_QUEUE = os.getenv("ORDER_PROCESSING_QUEUE", "order_processing")
+ORDER_PROCESSOR_QUEUE = os.getenv("ORDER_PROCESSOR_QUEUE", "order_processor_queue")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
@@ -27,10 +27,10 @@ connection = pika.BlockingConnection(pika.ConnectionParameters(
     credentials=credentials
 ))
 channel = connection.channel()
-channel.queue_declare(queue=ORDER_PROCESSING_QUEUE, durable=True)
+channel.queue_declare(queue=ORDER_PROCESSOR_QUEUE, durable=True)
 
 print(f"[*] Order Processor Worker started")
-print(f"[*] Waiting for messages in queue '{ORDER_PROCESSING_QUEUE}'. To exit press CTRL+C")
+print(f"[*] Waiting for messages in queue '{ORDER_PROCESSOR_QUEUE}'. To exit press CTRL+C")
 
 
 def parse_datetime(dt_string: Optional[str]) -> Optional[datetime]:
@@ -185,7 +185,7 @@ def callback(ch, method, properties, body):
 
 # Настройка обработки сообщений
 channel.basic_qos(prefetch_count=1)  # Обрабатываем по одному сообщению за раз
-channel.basic_consume(queue=ORDER_PROCESSING_QUEUE, on_message_callback=callback)
+channel.basic_consume(queue=ORDER_PROCESSOR_QUEUE, on_message_callback=callback)
 
 print("[*] Starting to consume messages...")
 
