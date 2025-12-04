@@ -34,7 +34,10 @@ RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
 credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+connection = pika.BlockingConnection(pika.ConnectionParameters(
+    host=RABBITMQ_HOST,
+    credentials=credentials
+))
 channel = connection.channel()
 channel.queue_declare(queue=GREENAPI_QUEUE, durable=True)
 # Объявляем очередь для обработки заказов
