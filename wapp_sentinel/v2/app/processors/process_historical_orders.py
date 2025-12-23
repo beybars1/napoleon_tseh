@@ -21,7 +21,7 @@ load_dotenv()
 
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 ORDER_PROCESSING_QUEUE = os.getenv("ORDER_PROCESSING_QUEUE", "order_processing")
-TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "120363403664602093@g.us")
+TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "")
 
 
 def publish_to_order_queue(connection, message_data: dict, table_name: str, message_id: int, timestamp, text: str, chat_id: str):

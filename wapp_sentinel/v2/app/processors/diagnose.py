@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "120363403664602093@g.us")
+TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "")
 
 def check_database():
     """Check database for messages"""
