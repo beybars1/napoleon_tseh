@@ -54,6 +54,8 @@ class DailyReportRequest(BaseModel):
     """Pydantic model for daily report request"""
     date: str  # Format: YYYY-MM-DD
     chat_id: str
+    split_messages: bool = True  # Send as multiple messages
+    delay_seconds: float = 1.5  # Delay between messages
     
 class DailyReportPreviewRequest(BaseModel):
     """Pydantic model for daily report preview"""
@@ -363,7 +365,12 @@ async def send_daily_report(
     
     try:
         service = DailyReportService(db)
-        result = await service.generate_and_send_report(target_date, request.chat_id)
+        result = await service.generate_and_send_report(
+            target_date, 
+            request.chat_id,
+            split_messages=request.split_messages,
+            delay_seconds=request.delay_seconds
+        )
         return result
     except Exception as e:
         raise HTTPException(
