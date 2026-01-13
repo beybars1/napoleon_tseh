@@ -1,0 +1,144 @@
+ Azure Container Apps - Required Environment Variables
+======================================================
+Date: January 11, 2026
+
+================================================================================
+1. API Container
+================================================================================
+
+Required (11 variables):
+------------------------
+RABBITMQ_HOST
+RABBITMQ_PORT
+RABBITMQ_USER
+RABBITMQ_PASSWORD
+GREENAPI_INSTANCE
+GREENAPI_TOKEN
+DATABASE_URL
+MANAGER_CHAT_IDS
+AI_AGENT_CHAT_IDS
+SCHEDULER_ENABLED
+DAILY_REPORT_CHAT_ID
+
+Optional with defaults (6 variables):
+--------------------------------------
+GREENAPI_QUEUE=greenapi_queue
+AI_AGENT_QUEUE=ai_agent_queue
+GREEN_API_BASE_URL=https://api.green-api.com
+DAILY_REPORT_TIME=08:00
+DAILY_REPORT_TIMEZONE=Asia/Almaty
+
+
+================================================================================
+2. greenapi-worker Container
+================================================================================
+
+Required (5 variables):
+-----------------------
+RABBITMQ_HOST
+RABBITMQ_USER
+RABBITMQ_PASSWORD
+DATABASE_URL
+TARGET_CHAT_ID
+
+Optional with defaults (3 variables):
+--------------------------------------
+RABBITMQ_PORT=5672
+GREENAPI_QUEUE=greenapi_queue
+ORDER_PROCESSOR_QUEUE=order_processor_queue
+
+Redundant (can be removed):
+----------------------------
+GREENAPI_INSTANCE
+GREENAPI_TOKEN
+GREENAPI_BASE_URL
+RABBITMQ_QUEUE
+POSTGRES_HOST
+POSTGRES_PORT
+POSTGRES_USER
+POSTGRES_PASSWORD
+POSTGRES_DB
+
+
+================================================================================
+3. ai-agent-worker Container
+================================================================================
+
+Required (9 variables):
+-----------------------
+RABBITMQ_HOST
+RABBITMQ_PORT
+RABBITMQ_USER
+RABBITMQ_PASSWORD
+DATABASE_URL
+GREENAPI_INSTANCE
+GREENAPI_TOKEN
+GREENAPI_BASE_URL
+OPENAI_API_KEY
+
+Optional with defaults (2 variables):
+--------------------------------------
+AI_AGENT_QUEUE=ai_agent_queue
+OPENAI_MODEL=gpt-3.5-turbo
+
+Redundant (can be removed):
+----------------------------
+AI_AGENT_CHAT_IDS
+RABBITMQ_QUEUE
+POSTGRES_HOST
+POSTGRES_PORT
+POSTGRES_USER
+POSTGRES_PASSWORD
+POSTGRES_DB
+
+
+================================================================================
+4. order-processor-worker Container
+================================================================================
+
+Required (5 variables):
+-----------------------
+RABBITMQ_HOST
+RABBITMQ_USER
+RABBITMQ_PASSWORD
+DATABASE_URL
+OPENAI_API_KEY
+
+Optional with defaults (2 variables):
+--------------------------------------
+ORDER_PROCESSOR_QUEUE=order_processor_queue
+OPENAI_MODEL=gpt-3.5-turbo
+
+Redundant (can be removed):
+----------------------------
+TARGET_CHAT_ID
+ORDER_PROCESSING_QUEUE
+RABBITMQ_PORT
+RABBITMQ_QUEUE
+POSTGRES_HOST
+POSTGRES_PORT
+POSTGRES_USER
+POSTGRES_PASSWORD
+POSTGRES_DB
+
+
+================================================================================
+CRITICAL PRODUCTION VALUES
+================================================================================
+
+TARGET_CHAT_ID=120363272114174001@g.us
+MANAGER_CHAT_IDS=120363272114174001@g.us
+GREENAPI_INSTANCE=7105242930
+GREENAPI_TOKEN=6e6a238888e0439490087474fbcf53dfa378df90300d4793a3
+
+
+================================================================================
+NOTES
+================================================================================
+
+1. If DATABASE_URL is set, all POSTGRES_* variables are redundant
+2. RABBITMQ_QUEUE is not used by any worker
+3. greenapi-worker does NOT need Green API credentials (only saves to DB)
+4. ai-agent-worker NEEDS Green API credentials (sends messages to clients)
+5. TARGET_CHAT_ID is critical for order processing flow
+6. MANAGER_CHAT_IDS routes group chat messages to order processing
