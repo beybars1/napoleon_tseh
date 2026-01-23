@@ -134,8 +134,16 @@ class Conversation(Base):
     chat_id = Column(String, nullable=False, index=True)
     sender_name = Column(String)
     sender_phone = Column(String)
-    status = Column(String, nullable=False, index=True)  # active, completed, abandoned
+    status = Column(String, nullable=False, index=True)  # active, completed, abandoned, escalated
     current_step = Column(String)  # current node in graph
+    
+    # v2 Architecture additions
+    last_intent = Column(String(50))  # Last classified intent
+    conversation_stage = Column(String(50), default='browsing')  # browsing | ordering | confirming | completed | escalated
+    clarification_count = Column(Integer, default=0)  # Track if agent is stuck
+    flagged_for_human = Column(Boolean, default=False, index=True)  # Escalation flag
+    escalation_reason = Column(String(100))  # Why escalated
+    
     created_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
     completed_at = Column(DateTime(timezone=True))
@@ -156,6 +164,7 @@ class ConversationMessage(Base):
     conversation_id = Column(Integer, ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
     role = Column(String, nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
+    intent = Column(String(50))  # v2: Classified intent for user messages
     timestamp = Column(DateTime(timezone=True), server_default='now()', nullable=False, index=True)
     message_metadata = Column(JSONB)
     
@@ -192,4 +201,37 @@ class AIGeneratedOrder(Base):
     
     def __repr__(self):
         return f"<AIGeneratedOrder(id={self.id}, conversation_id={self.conversation_id}, validation_status={self.validation_status})>"
+
+
+class Product(Base):
+    """SQLAlchemy model for product catalog"""
+    __tablename__ = "products"
+    
+    id = Column(Integer, primary_key=True)
+    
+    # Identity
+    product_id = Column(String(50), unique=True, nullable=False, index=True)  # e.g., "napoleon_classic"
+    name = Column(String(200), nullable=False)  # "Торт Наполеон Классический"
+    category = Column(String(50), nullable=False, index=True)  # "cake" | "dessert_set" | "pastry"
+    
+    # Details
+    description = Column(Text)
+    price_per_kg = Column(Numeric(10, 2))  # For cakes
+    fixed_price = Column(Numeric(10, 2))  # For sets
+    available = Column(Boolean, default=True, index=True)
+    
+    # Attributes (JSONB for flexibility)
+    sizes = Column(JSONB)  # ["1kg", "1.5kg", "2kg", "3kg"]
+    ingredients = Column(JSONB)  # ["мука", "масло", "яйца", ...]
+    allergens = Column(JSONB)  # ["глютен", "яйца", "молоко"]
+    
+    # Business rules
+    preparation_hours = Column(Integer, default=4)  # Minimum lead time
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default='now()', nullable=False)
+    
+    def __repr__(self):
+        return f"<Product(id={self.product_id}, name={self.name}, category={self.category}, available={self.available})>"
 
