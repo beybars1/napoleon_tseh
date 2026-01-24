@@ -11,7 +11,7 @@ import pika
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from app.database.database import SessionLocal
@@ -62,8 +62,8 @@ def get_or_create_conversation(db: Session, chat_id: str, sender_name: str = Non
             sender_phone=sender_phone,
             status="active",
             current_step="greet",
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         db.add(conversation)
         db.commit()
@@ -126,7 +126,7 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Orde
     """
     # Update conversation
     conversation.current_step = state.get("current_step")
-    conversation.updated_at = datetime.now()
+    conversation.updated_at = datetime.now(timezone.utc)
     
     # Save new messages
     existing_count = db.query(ConversationMessage).filter(
@@ -139,7 +139,7 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Orde
             conversation_id=conversation.id,
             role=msg["role"],
             content=msg["content"],
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
         db.add(conv_msg)
     
@@ -158,7 +158,11 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Orde
     
     # Update order data
     ai_order.items = state.get("items")
-    ai_order.estimated_delivery_datetime = datetime.fromisoformat(state["delivery_datetime"]) if state.get("delivery_datetime") else None
+    if state.get("delivery_datetime"):
+        parsed_dt = datetime.fromisoformat(state["delivery_datetime"])
+        ai_order.estimated_delivery_datetime = parsed_dt if parsed_dt.tzinfo else parsed_dt.replace(tzinfo=timezone.utc)
+    else:
+        ai_order.estimated_delivery_datetime = None
     ai_order.delivery_address = state.get("delivery_address")
     ai_order.payment_status = state.get("payment_status")
     ai_order.client_name = state.get("client_name")
@@ -169,9 +173,9 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Orde
     # If order confirmed, update status
     if state.get("order_confirmed"):
         ai_order.validation_status = "validated"
-        ai_order.confirmed_at = datetime.now()
+        ai_order.confirmed_at = datetime.now(timezone.utc)
         conversation.status = "completed"
-        conversation.completed_at = datetime.now()
+        conversation.completed_at = datetime.now(timezone.utc)
     
     db.commit()
     logger.info(f"Saved state for conversation {conversation.id}")

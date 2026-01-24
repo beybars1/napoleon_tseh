@@ -3,7 +3,7 @@ import os
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 # Добавляем корневую директорию проекта в PYTHONPATH
@@ -40,11 +40,11 @@ def parse_datetime(dt_string: Optional[str]) -> Optional[datetime]:
     
     try:
         # Пытаемся распарсить в формате "YYYY-MM-DD HH:MM:SS"
-        return datetime.strptime(dt_string, "%Y-%m-%d %H:%M:%S")
+        return datetime.strptime(dt_string, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
     except ValueError:
         try:
             # Пытаемся распарсить в формате "YYYY-MM-DD"
-            return datetime.strptime(dt_string, "%Y-%m-%d")
+            return datetime.strptime(dt_string, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except ValueError:
             print(f"[!] Failed to parse datetime: {dt_string}")
             return None
@@ -111,9 +111,15 @@ def process_order_message(order_data: dict):
     
     # Парсим timestamp
     try:
-        order_accepted_date = datetime.fromisoformat(timestamp_str) if timestamp_str else datetime.now()
-    except:
-        order_accepted_date = datetime.now()
+        if timestamp_str:
+            parsed_ts = datetime.fromisoformat(timestamp_str)
+            order_accepted_date = parsed_ts if parsed_ts.tzinfo else parsed_ts.replace(tzinfo=timezone.utc)
+            if order_accepted_date.tzinfo:
+                order_accepted_date = order_accepted_date.astimezone(timezone.utc)
+        else:
+            order_accepted_date = datetime.now(timezone.utc)
+    except Exception:
+        order_accepted_date = datetime.now(timezone.utc)
     
     # Парсим заказ через OpenAI
     print(f"[AI] Sending to OpenAI for parsing...")

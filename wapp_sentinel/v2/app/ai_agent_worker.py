@@ -11,7 +11,7 @@ import pika
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from app.database.database import SessionLocal
@@ -93,7 +93,7 @@ def get_or_create_conversation(db: Session, chat_id: str, sender_name: str = Non
         # Don't force "confirming" stage - set to "post_order" to indicate there's a recent order
         recent_completed.status = "active"
         recent_completed.conversation_stage = "post_order"  # Special stage: has confirmed order
-        recent_completed.updated_at = datetime.now()
+        recent_completed.updated_at = datetime.now(timezone.utc)
         db.commit()
         logger.info(f"Reopened conversation {recent_completed.id} (post_order stage, was completed at {recent_completed.completed_at})")
         return recent_completed
@@ -105,8 +105,8 @@ def get_or_create_conversation(db: Session, chat_id: str, sender_name: str = Non
         sender_phone=sender_phone,
         status="active",
         current_step="greet",
-        created_at=datetime.now(),
-        updated_at=datetime.now()
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
     )
     db.add(conversation)
     db.commit()
@@ -180,7 +180,7 @@ def load_conversation_state(db: Session, conversation: Conversation) -> Conversa
         flagged_for_human=conversation.flagged_for_human or False,
         escalation_reason=conversation.escalation_reason,
         created_at=conversation.created_at,
-        updated_at=datetime.now(),
+        updated_at=datetime.now(timezone.utc),
         next_step="router"
     )
     
@@ -197,7 +197,7 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Conv
     conversation.clarification_count = state.get("clarification_count", 0)
     conversation.flagged_for_human = state.get("flagged_for_human", False)
     conversation.escalation_reason = state.get("escalation_reason")
-    conversation.updated_at = datetime.now()
+    conversation.updated_at = datetime.now(timezone.utc)
     
     # Save new messages
     existing_count = db.query(ConversationMessage).filter(
@@ -211,7 +211,7 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Conv
             role=msg["role"],
             content=msg["content"],
             intent=state.get("last_intent") if msg["role"] == "user" else None,
-            timestamp=msg.get("timestamp", datetime.now()),
+            timestamp=msg.get("timestamp", datetime.now(timezone.utc)),
             message_metadata=msg.get("metadata")
         )
         db.add(conv_msg)
@@ -260,7 +260,7 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Conv
                 for fmt in ["%d.%m.%Y", "%d.%m.%y"]:
                     try:
                         pickup_dt = dt.strptime(f"{date_str} {time_str}", f"{fmt} %H:%M")
-                        ai_order.estimated_delivery_datetime = pickup_dt
+                        ai_order.estimated_delivery_datetime = pickup_dt.replace(tzinfo=timezone.utc)
                         break
                     except:
                         continue
@@ -271,9 +271,9 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Conv
         completeness = order_draft.get("completeness", {})
         if all(completeness.values()) and state.get("conversation_stage") == "completed":
             ai_order.validation_status = "validated"
-            ai_order.confirmed_at = datetime.now()
+            ai_order.confirmed_at = datetime.now(timezone.utc)
             conversation.status = "completed"
-            conversation.completed_at = datetime.now()
+            conversation.completed_at = datetime.now(timezone.utc)
     
     db.commit()
     logger.info(f"Saved state for conversation {conversation.id}")
@@ -342,7 +342,7 @@ def process_message(body: dict):
             if last_content and last_content == incoming_content:
                 last_ts = last_user_msg.get("timestamp")
                 if isinstance(last_ts, datetime):
-                    now = datetime.now(last_ts.tzinfo) if last_ts.tzinfo else datetime.now()
+                    now = datetime.now(last_ts.tzinfo) if last_ts.tzinfo else datetime.now(timezone.utc)
                     if abs((now - last_ts).total_seconds()) <= 10:
                         logger.info("Duplicate user message detected; skipping processing.")
                         return
@@ -354,7 +354,7 @@ def process_message(body: dict):
         state["messages"].append({
             "role": "user",
             "content": message_text,
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now(timezone.utc),
             "metadata": {
                 "source_message_id": source_message_id,
                 "raw_data": raw_data

@@ -19,8 +19,8 @@ class Order(Base):
     chat_id = Column(String, nullable=False)
     
     # Даты
-    order_accepted_date = Column(DateTime(timezone=False), nullable=False)
-    estimated_delivery_datetime = Column(DateTime(timezone=False))
+    order_accepted_date = Column(DateTime(timezone=True), nullable=False)
+    estimated_delivery_datetime = Column(DateTime(timezone=True))
     
     # Оплата
     payment_status = Column(Boolean)  # True=paid, False=unpaid, None=unknown
@@ -43,8 +43,8 @@ class Order(Base):
     confidence = Column(String(20))  # 'high', 'medium', 'low'
     processing_status = Column(String(20), default='completed')
     
-    created_at = Column(DateTime(timezone=False), server_default='now()')
-    updated_at = Column(DateTime(timezone=False), server_default='now()')
+    created_at = Column(DateTime(timezone=True), server_default='now()')
+    updated_at = Column(DateTime(timezone=True), server_default='now()')
     
     __table_args__ = (
         UniqueConstraint('message_table', 'message_id', name='orders_message_unique'),

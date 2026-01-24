@@ -5,7 +5,7 @@ import os
 import json
 import re
 from openai import OpenAI
-from datetime import datetime
+from datetime import datetime, timezone
 from app.agents.state import ConversationState
 from app.agents.tools.order_tools import format_order_summary
 from app.database.database import SessionLocal
@@ -190,11 +190,11 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             if order_draft.get("pickup_date") and order_draft.get("pickup_time"):
                 date_str = f"{order_draft['pickup_date']} {order_draft['pickup_time']}"
                 try:
-                    ai_order.estimated_delivery_datetime = datetime.strptime(date_str, "%d.%m.%Y %H:%M")
+                    ai_order.estimated_delivery_datetime = datetime.strptime(date_str, "%d.%m.%Y %H:%M").replace(tzinfo=timezone.utc)
                 except ValueError:
                     pass
             
-            ai_order.confirmed_at = datetime.now()
+            ai_order.confirmed_at = datetime.now(timezone.utc)
             db.commit()
             
             # Update conversation state

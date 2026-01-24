@@ -20,8 +20,8 @@ def get_timestamp(ts):
         if not ts:
             return None
         timestamp = int(ts)
-        # Используем fromtimestamp, так как timestamp от Green API уже в UTC
-        return datetime.fromtimestamp(timestamp)
+        # Timestamp от Green API уже в UTC
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
     except (ValueError, TypeError) as e:
         print(f"Error converting timestamp {ts}: {e}")
         return None

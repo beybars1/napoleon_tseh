@@ -146,7 +146,7 @@ def router_node(state: ConversationState) -> ConversationState:
     # Handle POST_ORDER stage (user has a recently confirmed order)
     # Route based on intent - only show order if they want to modify it or check status
     if state.get("conversation_stage") == "post_order":
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         from app.database.database import SessionLocal
         from app.database.models import AIGeneratedOrder
 
@@ -163,9 +163,9 @@ def router_node(state: ConversationState) -> ConversationState:
                 time_since = None
                 if validated_order and validated_order.confirmed_at:
                     confirmed_at = validated_order.confirmed_at
-                    if confirmed_at.tzinfo is not None:
-                        confirmed_at = confirmed_at.replace(tzinfo=None)
-                    time_since = datetime.now() - confirmed_at
+                    if confirmed_at.tzinfo is None:
+                        confirmed_at = confirmed_at.replace(tzinfo=timezone.utc)
+                    time_since = datetime.now(timezone.utc) - confirmed_at
 
                 return validated_order, time_since, db
             except:

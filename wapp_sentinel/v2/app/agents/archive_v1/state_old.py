@@ -1,6 +1,6 @@
 """State definition for LangGraph order collection workflow"""
 from typing import TypedDict, List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class OrderState(TypedDict):
@@ -63,6 +63,6 @@ class OrderState(TypedDict):
         self.needs_clarification = False
         self.clarification_topic = None
         self.retry_count = 0
-        self.started_at = datetime.now().isoformat()
+        self.started_at = datetime.now(timezone.utc).isoformat()
         self.last_user_message = ""
         self.last_assistant_message = ""
