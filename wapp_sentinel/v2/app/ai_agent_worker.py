@@ -7,7 +7,6 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pika
 import json
 import os
 import logging
@@ -18,6 +17,7 @@ from app.database.database import SessionLocal
 from app.database.models import Conversation, ConversationMessage, AIGeneratedOrder
 from app.agents.order_graph import order_graph
 from app.agents.state import ConversationState
+from app.messaging import get_broker, AckAction
 import httpx
 import asyncio
 from sqlalchemy import and_
@@ -33,10 +33,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
-RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
-RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 AI_AGENT_QUEUE = os.getenv("AI_AGENT_QUEUE", "ai_agent_queue")
 
 # Green API credentials
@@ -384,17 +380,16 @@ def process_message(body: dict):
         db.close()
 
 
-def callback(ch, method, properties, body):
+def callback(message: dict) -> AckAction:
     """
-    RabbitMQ callback for processing messages.
+    Broker callback for processing messages.
     """
     try:
-        message = json.loads(body)
         process_message(message)
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        return AckAction.ACK
     except Exception as e:
         logger.error(f"Error in callback: {e}", exc_info=True)
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        return AckAction.NACK
 
 
 def main():
@@ -402,44 +397,18 @@ def main():
     Main worker loop.
     """
     logger.info("Starting AI Agent Worker...")
-    logger.info(f"Connecting to RabbitMQ at {RABBITMQ_HOST}:{RABBITMQ_PORT}")
     
-    # Setup RabbitMQ connection with credentials
-    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-    parameters = pika.ConnectionParameters(
-        host=RABBITMQ_HOST,
-        port=RABBITMQ_PORT,
-        credentials=credentials,
-        heartbeat=600,
-        blocked_connection_timeout=300
-    )
+    # Initialize message broker
+    broker = get_broker()
     
-    connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
-    
-    # Declare queue
-    channel.queue_declare(queue=AI_AGENT_QUEUE, durable=True)
-    
-    # Set QoS
-    channel.basic_qos(prefetch_count=1)
-    
-    # Start consuming
-    channel.basic_consume(
-        queue=AI_AGENT_QUEUE,
-        on_message_callback=callback
-    )
-    
-    logger.info(f"Waiting for messages in queue: {AI_AGENT_QUEUE}")
+    logger.info(f"Consuming from queue: {AI_AGENT_QUEUE}")
     logger.info("Press CTRL+C to exit")
     
     try:
-        channel.start_consuming()
-    except KeyboardInterrupt:
-        logger.info("Stopping worker...")
-        channel.stop_consuming()
+        broker.consume(AI_AGENT_QUEUE, callback)
     finally:
-        connection.close()
-        logger.info("Connection closed")
+        broker.close()
+        logger.info("Worker stopped")
 
 
 if __name__ == "__main__":

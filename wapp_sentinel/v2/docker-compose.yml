@@ -48,6 +48,8 @@ services:
     container_name: napoleon_api
     env_file:
       - .env
+    environment:
+      - BROKER_TYPE=rabbitmq
     ports:
       - "8000:8000"
     depends_on:
@@ -71,6 +73,8 @@ services:
     container_name: napoleon_ai_agent_worker
     env_file:
       - .env
+    environment:
+      - BROKER_TYPE=rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,6 +97,8 @@ services:
     container_name: napoleon_greenapi_worker
     env_file:
       - .env
+    environment:
+      - BROKER_TYPE=rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,6 +121,8 @@ services:
     container_name: napoleon_order_processor_worker
     env_file:
       - .env
+    environment:
+      - BROKER_TYPE=rabbitmq
     depends_on:
       postgres:
         condition: service_healthy

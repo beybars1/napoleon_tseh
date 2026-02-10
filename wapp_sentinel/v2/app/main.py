@@ -6,7 +6,6 @@ import os
 import json
 import httpx
 from dotenv import load_dotenv
-import pika
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 
@@ -36,8 +35,12 @@ app = FastAPI(
 
 # Get Green API base URL from environment variables
 GREEN_API_BASE_URL = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com")
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 GREENAPI_QUEUE = os.getenv("GREENAPI_QUEUE", "greenapi_queue")
+AI_AGENT_QUEUE = os.getenv("AI_AGENT_QUEUE", "ai_agent_queue")
+
+# Message broker (RabbitMQ or Azure Service Bus)
+from app.messaging import get_broker
+broker = get_broker()
 
 
 # Pydantic модель для валидации входящих данных
@@ -156,71 +159,14 @@ async def remove_notification(receipt_id: int):
             detail=f"Failed to connect to Green API: {str(e)}"
         )
 
-def publish_to_rabbitmq(message: dict):
-    """Publish message to RabbitMQ queue"""
-    try:
-        credentials = pika.PlainCredentials(
-            os.getenv("RABBITMQ_USER", "guest"),
-            os.getenv("RABBITMQ_PASSWORD", "guest")
-        )
-        parameters = pika.ConnectionParameters(
-            host=RABBITMQ_HOST,
-            port=int(os.getenv("RABBITMQ_PORT", "5672")),
-            credentials=credentials
-        )
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        
-        channel.queue_declare(queue=GREENAPI_QUEUE, durable=True)
-        
-        channel.basic_publish(
-            exchange='',
-            routing_key=GREENAPI_QUEUE,
-            body=json.dumps(message),
-            properties=pika.BasicProperties(
-                delivery_mode=2,  # делаем сообщение persistent
-            )
-        )
-        
-        connection.close()
-        return True
-    except Exception as e:
-        print(f"Error publishing to RabbitMQ: {e}")
-        return False
+def publish_to_greenapi_queue(message: dict) -> bool:
+    """Publish message to GreenAPI processing queue."""
+    return broker.publish(GREENAPI_QUEUE, message)
 
 
-def publish_to_ai_agent_queue(message: dict):
-    """Publish message to AI agent interactions queue"""
-    try:
-        credentials = pika.PlainCredentials(
-            os.getenv("RABBITMQ_USER", "guest"),
-            os.getenv("RABBITMQ_PASSWORD", "guest")
-        )
-        parameters = pika.ConnectionParameters(
-            host=RABBITMQ_HOST,
-            port=int(os.getenv("RABBITMQ_PORT", "5672")),
-            credentials=credentials
-        )
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        
-        ai_queue = os.getenv("AI_AGENT_QUEUE", "ai_agent_queue")
-        channel.queue_declare(queue=ai_queue, durable=True)
-        
-        channel.basic_publish(
-            exchange='',
-            routing_key=ai_queue,
-            body=json.dumps(message),
-            properties=pika.BasicProperties(
-                delivery_mode=2,
-            )
-        )
-        
-        connection.close()
-        return True
-    except Exception as e:
-        print(f"Error publishing to AI agent queue: {e}")
-        return False
+def publish_to_ai_agent_queue(message: dict) -> bool:
+    """Publish message to AI agent interactions queue."""
+    return broker.publish(AI_AGENT_QUEUE, message)
 
 
 def determine_message_type(notification_data: dict) -> str:
@@ -326,7 +272,7 @@ async def receive_notification(request: Request):
                 raise HTTPException(status_code=500, detail="Failed to queue AI agent message")
         else:
             # Manager message - use existing flow
-            if publish_to_rabbitmq(notification_data):
+            if publish_to_greenapi_queue(notification_data):
                 return {
                     "status": "queued",
                     "message": "Manager message sent to processing queue",

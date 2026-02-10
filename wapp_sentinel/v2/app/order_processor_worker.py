@@ -1,4 +1,3 @@
-import pika
 import os
 import json
 import sys
@@ -12,22 +11,15 @@ sys.path.append(str(Path(__file__).parent.parent))
 from app.database.database import SessionLocal
 from app.database.models import Order, IncomingMessage, OutgoingMessage, OutgoingAPIMessage
 from app.services.openai_service import OpenAIOrderParser
+from app.messaging import get_broker, AckAction
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 ORDER_PROCESSOR_QUEUE = os.getenv("ORDER_PROCESSOR_QUEUE", "order_processor_queue")
-RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
-RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
 # Инициализируем OpenAI parser
 openai_parser = OpenAIOrderParser()
 
-credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-connection = pika.BlockingConnection(pika.ConnectionParameters(
-    host=RABBITMQ_HOST,
-    credentials=credentials
-))
-channel = connection.channel()
-channel.queue_declare(queue=ORDER_PROCESSOR_QUEUE, durable=True)
+# Initialize message broker
+broker = get_broker()
 
 print(f"[*] Order Processor Worker started")
 print(f"[*] Waiting for messages in queue '{ORDER_PROCESSOR_QUEUE}'. To exit press CTRL+C")
@@ -165,40 +157,17 @@ def process_order_message(order_data: dict):
         db.close()
 
 
-def callback(ch, method, properties, body):
-    """Callback for processing messages from queue"""
+def callback(message: dict) -> AckAction:
+    """Process a message from the order processor queue."""
     print(f"\n[x] Received order message")
     
-    try:
-        order_data = json.loads(body.decode())
-        
-        if process_order_message(order_data):
-            print(f"[✓] Order processed successfully")
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-        else:
-            print(f"[!] Order processing failed, rejecting message")
-            # Отклоняем сообщение, не возвращаем в очередь
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-            
-    except json.JSONDecodeError as e:
-        print(f"[!] Invalid JSON: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-    except Exception as e:
-        print(f"[!] Error processing order: {e}")
-        # В случае неожиданной ошибки, возвращаем в очередь для повторной попытки
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+    if process_order_message(message):
+        print(f"[✓] Order processed successfully")
+        return AckAction.ACK
+    else:
+        print(f"[!] Order processing failed, rejecting message")
+        return AckAction.NACK
 
-
-# Настройка обработки сообщений
-channel.basic_qos(prefetch_count=1)  # Обрабатываем по одному сообщению за раз
-channel.basic_consume(queue=ORDER_PROCESSOR_QUEUE, on_message_callback=callback)
 
 print("[*] Starting to consume messages...")
-
-try:
-    channel.start_consuming()
-except KeyboardInterrupt:
-    print("\n[*] Stopping Order Processor Worker...")
-    channel.stop_consuming()
-    connection.close()
-    print("[*] Worker stopped")
+broker.consume(ORDER_PROCESSOR_QUEUE, callback)

@@ -1,4 +1,3 @@
-import pika
 import os
 import json
 import sys
@@ -13,6 +12,7 @@ from app.database.models import (
     OutgoingAPIMessage, IncomingMessage, IncomingCall,
     OutgoingMessage, OutgoingMessageStatus
 )
+from app.messaging import get_broker, AckAction
 
 def get_timestamp(ts):
     """Convert Unix timestamp to datetime"""
@@ -26,49 +26,31 @@ def get_timestamp(ts):
         print(f"Error converting timestamp {ts}: {e}")
         return None
 
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 GREENAPI_QUEUE = os.getenv("GREENAPI_QUEUE", "greenapi_queue")
 ORDER_PROCESSOR_QUEUE = os.getenv("ORDER_PROCESSOR_QUEUE", "order_processor_queue")
 TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID", "")
-RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
-RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
-credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-connection = pika.BlockingConnection(pika.ConnectionParameters(
-    host=RABBITMQ_HOST,
-    credentials=credentials
-))
-channel = connection.channel()
-channel.queue_declare(queue=GREENAPI_QUEUE, durable=True)
-# Объявляем очередь для обработки заказов
-channel.queue_declare(queue=ORDER_PROCESSOR_QUEUE, durable=True)
+# Initialize message broker
+broker = get_broker()
 
 print(f"[*] Waiting for messages in queue '{GREENAPI_QUEUE}'. To exit press CTRL+C")
 
 def publish_to_order_queue(message_data: dict, table_name: str, message_id: int, timestamp: datetime, text: str, chat_id: str):
     """Publish message to order processing queue"""
-    try:
-        order_message = {
-            'message_id': message_id,
-            'message_table': table_name,
-            'timestamp': timestamp.isoformat() if timestamp else None,
-            'text': text,
-            'chat_id': chat_id,
-            'raw_data': message_data
-        }
-        
-        channel.basic_publish(
-            exchange='',
-            routing_key=ORDER_PROCESSOR_QUEUE,
-            body=json.dumps(order_message),
-            properties=pika.BasicProperties(
-                delivery_mode=2,  # persistent
-            )
-        )
+    order_message = {
+        'message_id': message_id,
+        'message_table': table_name,
+        'timestamp': timestamp.isoformat() if timestamp else None,
+        'text': text,
+        'chat_id': chat_id,
+        'raw_data': message_data
+    }
+    
+    if broker.publish(ORDER_PROCESSOR_QUEUE, order_message):
         print(f"[→] Published to order processor queue: message_id={message_id}, table={table_name}")
         return True
-    except Exception as e:
-        print(f"[!] Error publishing to order queue: {e}")
+    else:
+        print(f"[!] Error publishing to order queue")
         return False
 
 def save_event_to_db(notification_data):
@@ -174,19 +156,15 @@ def save_event_to_db(notification_data):
     finally:
         db.close()
 
-def callback(ch, method, properties, body):
-    print(f"[x] Received message: {body}")
+def callback(message: dict) -> AckAction:
+    """Process a message from the GreenAPI queue."""
+    print(f"[x] Received message")
     try:
-        # Преобразуем JSON в dict
-        notification_data = json.loads(body.decode())
-        save_event_to_db(notification_data)
+        save_event_to_db(message)
         print("[+] Saved to DB")
+        return AckAction.ACK
     except Exception as e:
         print(f"[!] Error processing message: {e}")
-    finally:
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        return AckAction.ACK  # ACK even on error to avoid infinite requeue
 
-channel.basic_qos(prefetch_count=1)
-channel.basic_consume(queue=GREENAPI_QUEUE, on_message_callback=callback)
-
-channel.start_consuming()
+broker.consume(GREENAPI_QUEUE, callback)
