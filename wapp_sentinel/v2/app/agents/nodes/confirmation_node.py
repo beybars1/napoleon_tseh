@@ -105,7 +105,7 @@ def confirmation_node(state: ConversationState) -> ConversationState:
                 ai_order.validation_status = "cancelled"
                 db.commit()
             
-            response_text = "Хорошо, начнем заново! 😊\n\nКакой торт вас интересует?"
+            response_text = "Хорошо, начнём заново! 😊\n\nКакой торт Вас интересует?"
             state["conversation_stage"] = "inquiry"
             state["clarification_count"] = 0
             state["order_draft"] = {
@@ -122,23 +122,24 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             return state
         
         # Classify confirmation intent
-        confirmation_prompt = f"""Определи намерение клиента:
+        confirmation_prompt = f"""Определи намерение клиента. Клиент может писать на русском, казахском или смешанно.
 
 Сообщение: "{user_message}"
 
 Варианты:
-1. "confirmed" - клиент ЯВНО подтверждает заказ словами: да, подтверждаю, верно, все правильно, ок, хорошо, согласен
-2. "rejected" - клиент отказывается (нет, отмена, не хочу)
-3. "modification" - клиент хочет изменить ИЛИ предоставляет новые данные (дату, время, имя, телефон, оплату)
-4. "unclear" - непонятно
+1. "confirmed" - клиент ЯВНО подтверждает: да, подтверждаю, верно, ок, хорошо, согласен, иә, растаймын, дұрыс, жақсы
+2. "rejected" - клиент отказывается: нет, отмена, не хочу, жоқ, бас тартамын
+3. "modification" - клиент хочет изменить ДАННЫЕ ЗАКАЗА (дату, время, торт, имя, телефон, оплату)
+4. "unclear" - непонятно, вопрос, просьба не связанная с изменением заказа
 
 ПРАВИЛА:
-- Если сообщение содержит дату (23.01, 25 января) → "modification"
-- Если сообщение содержит время (15:00, 20 00) → "modification"
-- Если сообщение содержит телефон (+7700, 8700) → "modification"
-- Если сообщение содержит "другая", "другое", "другой" → "modification"
-- Если сообщение содержит "изменить", "поменять", "можно" → "modification"
-- ТОЛЬКО если клиент говорит "да", "подтверждаю", "верно", "ок" БЕЗ новых данных → "confirmed"
+- Если сообщение содержит конкретные данные (дату, время, телефон, имя торта) → "modification"
+- Если содержит "изменить", "поменять", "другую дату" → "modification"
+- "на казахском", "можно на казахском", "казакша бола ма" = просьба сменить ЯЗЫК, НЕ заказ → "unclear"
+- "можно на русском", "по-русски" = просьба сменить ЯЗЫК → "unclear" 
+- "нет, я не хочу менять" + "подтверждаю" → "confirmed"
+- ТОЛЬКО если клиент говорит "да", "подтверждаю", "верно" БЕЗ новых данных → "confirmed"
+- Если непонятно что клиент хочет → "unclear"
 
 Отвечай только одним словом: confirmed/rejected/modification/unclear"""
 
@@ -208,16 +209,16 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             
             # TODO: Send to order_processor_queue for validation
             
-            response_text = f"""✅ Заказ подтвержден!
+            response_text = f"""✅ Заказ подтверждён!
 
 📱 Номер заказа: #{ai_order.id if ai_order else 'N/A'}
 
-Мы свяжемся с вами в течение 15 минут для:
+Мы свяжемся с Вами в течение 15 минут для:
 • Подтверждения деталей
 • Отправки реквизитов для предоплаты (если выбрана)
 • Уточнения адреса самовывоза
 
-Спасибо за заказ! 🍰"""
+Благодарим за заказ! 🍰"""
             
             state["conversation_stage"] = "completed"
             
@@ -239,6 +240,7 @@ def confirmation_node(state: ConversationState) -> ConversationState:
 
             # Try to extract new values directly from the modification message
             extraction_prompt = f"""Извлеки новые данные из сообщения клиента, который хочет изменить заказ.
+Клиент может писать на русском, казахском или смешанно.
 
 Сообщение: "{state["messages"][-1]["content"]}"
 
@@ -300,8 +302,32 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             if replace_from:
                 replace_from = replace_from.strip()
 
-            normalized_date = normalize_date_string(extracted.get("new_date"))
-            normalized_time = normalize_time_string(extracted.get("new_time"))
+            # Use resolve_natural_date for smart date/time resolution (handles natural language)
+            from app.agents.tools.order_tools import resolve_natural_date
+            raw_date = extracted.get("new_date")
+            raw_time = extracted.get("new_time")
+            resolved_date = None
+            resolved_time = None
+            if raw_date:
+                resolved_date, resolved_time_from_date = resolve_natural_date(raw_date, raw_time)
+                if resolved_date:
+                    normalized_date = resolved_date
+                else:
+                    normalized_date = normalize_date_string(raw_date)
+                if resolved_time_from_date and not raw_time:
+                    resolved_time = resolved_time_from_date
+            else:
+                normalized_date = None
+            
+            if raw_time and not resolved_time:
+                # Resolve vague time like "вечер", "утром", etc.
+                _, resolved_time = resolve_natural_date("сегодня", raw_time)
+                if not resolved_time:
+                    resolved_time = normalize_time_string(raw_time)
+            elif not raw_time and not resolved_time:
+                resolved_time = None
+            
+            normalized_time = resolved_time
 
             # Apply extracted changes directly to order_draft
             if normalized_time:
@@ -384,17 +410,17 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             else:
                 # No values extracted, ask for specific field based on what user wants to change
                 if mod_field == "items":
-                    response_text = "Хорошо, скажите какой торт и сколько кг хотите вместо текущего заказа?"
+                    response_text = "Хорошо, подскажите, какой торт и сколько кг Вы хотели бы вместо текущего заказа?"
                 elif mod_field == "date":
-                    response_text = "Хорошо, укажите новую дату получения (например: 25.01.2026)."
+                    response_text = "Хорошо, пожалуйста, укажите новую дату получения (например: 25.01.2026 или «завтра»)."
                 elif mod_field == "time":
-                    response_text = "Хорошо, укажите новое время получения (например: 15:00)."
+                    response_text = "Хорошо, пожалуйста, укажите новое время получения (например: 15:00)."
                 elif mod_field == "customer":
-                    response_text = "Хорошо, укажите новое имя и телефон."
+                    response_text = "Хорошо, пожалуйста, укажите новое имя и телефон."
                 elif mod_field == "payment":
-                    response_text = "Хорошо, выберите способ оплаты: предоплата 100% или наличные при получении."
+                    response_text = "Хорошо, выберите удобный способ оплаты: предоплата 100% или наличные при получении."
                 else:
-                    response_text = "Что именно хотите изменить? (дату, время, торт, имя, телефон, оплату)"
+                    response_text = "Что именно Вы хотели бы изменить? (дату, время, торт, имя, телефон, оплату)"
 
                 # Stay in confirming stage so next message comes back here
                 state["conversation_stage"] = "confirming"
@@ -421,7 +447,7 @@ def confirmation_node(state: ConversationState) -> ConversationState:
                 conversation.conversation_stage = "inquiry"
                 db.commit()
             
-            response_text = "Хорошо, заказ отменен. Если передумаете — напишите снова! 😊"
+            response_text = "Хорошо, заказ отменён. Если передумаете — напишите нам снова! 😊"
             state["conversation_stage"] = "inquiry"
             state["order_draft"] = {
                 "items": [],
@@ -429,34 +455,56 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             }
             
         else:
-            # Unclear, explain and ask again
+            # Unclear — check if it's a language switch request
+            import re
+            lang_switch = re.search(r'(казахск|қазақша|казакша|на казахском|на русском|по-русски|орысша)', user_message, re.IGNORECASE)
+            
             summary = format_order_summary(order_draft)
             
-            # Check if there are any pre-filled fields from previous orders
-            has_prefilled = any([
-                order_draft.get("pickup_date"),
-                order_draft.get("customer_name"),
-                order_draft.get("customer_phone"),
-                order_draft.get("payment_method")
-            ])
-            
-            if has_prefilled and not order_draft.get("completeness", {}).get("customer"):
-                # Explain where data came from
-                response_text = f"""{summary}
+            if lang_switch:
+                # User wants to switch language — just re-show summary with confirmation prompt
+                # Detect which language they want
+                kz_requested = bool(re.search(r'(казахск|қазақша|казакша)', user_message, re.IGNORECASE))
+                if kz_requested:
+                    response_text = f"""{summary}
 
-ℹ️ Некоторые данные заполнены из предыдущих заказов для удобства.
+✅ Бәрі дұрыс па? Тапсырысты растаңыз.
+• «Иә» немесе «Растаймын» деп жазыңыз
+• Немесе нені өзгерткіңіз келетінін жазыңыз"""
+                else:
+                    response_text = f"""{summary}
 
 ❓ Пожалуйста, подтвердите:
-• Напишите "Да" или "Подтверждаю" если все верно
-• Или скажите, что хотите изменить (например: "другую дату", "другой телефон")
-• Или "Заново" чтобы начать с нуля"""
+• Напишите «Да» или «Подтверждаю» для оформления
+• Или укажите, что хотите изменить"""
+                state["clarification_count"] = state.get("clarification_count", 0)  # Don't increment
             else:
-                response_text = f"""{summary}
+                # Truly unclear
+                # Check if there are any pre-filled fields from previous orders
+                has_prefilled = any([
+                    order_draft.get("pickup_date"),
+                    order_draft.get("customer_name"),
+                    order_draft.get("customer_phone"),
+                    order_draft.get("payment_method")
+                ])
+                
+                if has_prefilled and not order_draft.get("completeness", {}).get("customer"):
+                    # Explain where data came from
+                    response_text = f"""{summary}
+
+ℹ️ Некоторые данные заполнены из Ваших предыдущих заказов для удобства.
 
 ❓ Пожалуйста, подтвердите:
-• Напишите "Да" или "Подтверждаю" для оформления
-• Или скажите, что хотите изменить"""
-            state["clarification_count"] = state.get("clarification_count", 0) + 1
+• Напишите «Да» или «Подтверждаю», если всё верно
+• Или укажите, что хотите изменить (например: «другую дату», «другой телефон»)
+• Или «Заново», чтобы начать с нуля"""
+                else:
+                    response_text = f"""{summary}
+
+❓ Пожалуйста, подтвердите:
+• Напишите «Да» или «Подтверждаю» для оформления
+• Или укажите, что хотите изменить"""
+                state["clarification_count"] = state.get("clarification_count", 0) + 1
         
         state["messages"].append({
             "role": "assistant",

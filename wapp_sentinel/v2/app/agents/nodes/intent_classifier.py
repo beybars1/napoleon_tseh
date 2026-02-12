@@ -42,6 +42,7 @@ def classify_intent(message: str, conversation_history: list[dict]) -> dict:
     ])
     
     prompt = f"""Analyze this customer message in a Napoleon cake ordering conversation.
+The customer may write in Russian, Kazakh, or a mix of both languages.
 
 Recent context:
 {context}
@@ -49,26 +50,26 @@ Recent context:
 Current message: {message}
 
 Classify into ONE intent:
-- greeting: Hi, hello, good day, привет, здравствуйте
-- product_inquiry: Questions about MENU, prices, flavors, sizes, "покажи меню", "что есть", "какие торты"
-- order_placement: Wants to order, place order, buy cake, "хочу заказать"
-- order_info_provision: Providing order details (date, time, name, phone, quantity, payment method)
-- order_reset: FULL cancellation/restart ONLY: "сброс", "заново", "отмена заказа", "начать сначала", "удалить заказ"
-- order_modification: Change SPECIFIC part of existing order: "другое время", "поменять дату", "изменить"
-- acknowledgment: Simple acknowledgment WITHOUT new info: "хорошо", "ок", "понятно", "спасибо"
-- customization_request: Special decorations, custom text, unique modifications
-- delivery_inquiry: Asking about delivery, shipping, location
+- greeting: привет, здравствуйте, сәлем, қайырлы күн, hi, hello
+- product_inquiry: Questions about MENU, prices, flavors, sizes: "покажи меню", "что есть", "какие торты", "менюді көрсет", "не бар"
+- order_placement: Wants to order: "хочу заказать", "тапсырыс бергім келеді"
+- order_info_provision: Providing order details (date, time, name, phone, quantity, payment)
+- order_reset: FULL cancellation: "сброс", "заново", "отмена заказа", "тапсырысты болдырмау"
+- order_modification: Change SPECIFIC part: "другое время", "поменять дату", "изменить", "өзгерту"
+- acknowledgment: Simple acknowledgment: "хорошо", "ок", "понятно", "спасибо", "жақсы", "түсінікті", "рахмет"
+- customization_request: Special decorations, custom text
+- delivery_inquiry: About delivery, shipping, location, "жеткізу"
 - payment_inquiry: Payment methods questions (NOT providing payment choice)
-- order_status: Checking existing order: "мой заказ", "статус заказа", "что я заказал", "расскажи о заказе"
-- complaint: Issues, problems, dissatisfaction
-- small_talk: Off-topic chat, weather, compliments
+- order_status: Checking order: "мой заказ", "статус заказа", "менің тапсырысым"
+- complaint: Issues, problems, dissatisfaction, "шағым"
+- small_talk: Off-topic chat
 
 CRITICAL RULES:
-1. "покажи меню" / "что есть" / "какие торты" = ALWAYS product_inquiry (never order_reset!)
+1. "покажи меню" / "что есть" / "какие торты" / "менюді көрсет" = ALWAYS product_inquiry
 2. "заново" / "сброс" / "отмена" = order_reset ONLY if about the ORDER
-3. "мой заказ" / "что я заказал" / "расскажи о заказе" = order_status
+3. "мой заказ" / "что я заказал" / "менің тапсырысым" = order_status
 4. Date/time/name/phone in message = order_info_provision
-5. IGNORE previous context when classifying "покажи меню" - it's ALWAYS product_inquiry
+5. Classify based on CONTENT, not language. Kazakh and Russian intents are the same.
 
 Respond ONLY with JSON: {{"intent": "...", "confidence": 0.0-1.0}}"""
 
@@ -76,7 +77,7 @@ Respond ONLY with JSON: {{"intent": "...", "confidence": 0.0-1.0}}"""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an intent classifier for a cake ordering chatbot. Respond only with valid JSON."},
+                {"role": "system", "content": "You are an intent classifier for a cake ordering chatbot. Customers write in Russian, Kazakh, or a mix. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1,

@@ -35,7 +35,7 @@ def handle_order_reset(state: ConversationState, confirmed: bool = False) -> Con
         state["conversation_stage"] = "inquiry"
         state["messages"].append({
             "role": "assistant",
-            "content": "У вас пока нет активного заказа. Какой торт вас интересует?",
+            "content": "У Вас пока нет активного заказа. Какой торт Вас интересует?",
             "timestamp": state["updated_at"]
         })
         state["next_step"] = "end"
@@ -47,7 +47,7 @@ def handle_order_reset(state: ConversationState, confirmed: bool = False) -> Con
         summary = format_order_summary(order_draft)
         state["messages"].append({
             "role": "assistant",
-            "content": f"Вы хотите отменить текущий заказ?\n\n{summary}\n\n❓ Напишите «Да, отменить» для отмены или «Нет» чтобы продолжить.",
+            "content": f"Вы хотите отменить текущий заказ?\n\n{summary}\n\n❓ Напишите «Да, отменить» для отмены или «Нет», чтобы продолжить.",
             "timestamp": state["updated_at"]
         })
         state["conversation_stage"] = "reset_confirmation"
@@ -77,7 +77,7 @@ def handle_order_reset(state: ConversationState, confirmed: bool = False) -> Con
     }
     state["messages"].append({
         "role": "assistant",
-        "content": "Хорошо, заказ отменен. Начнем заново! 😊\n\nКакой торт вас интересует?",
+        "content": "Хорошо, заказ отменён. Начнём заново! 😊\n\nКакой торт Вас интересует?",
         "timestamp": state["updated_at"]
     })
     state["next_step"] = "end"
@@ -110,7 +110,7 @@ def router_node(state: ConversationState) -> ConversationState:
             summary = format_order_summary(state.get("order_draft", {}))
             state["messages"].append({
                 "role": "assistant",
-                "content": f"Хорошо, продолжаем с текущим заказом.\n\n{summary}\n\n✅ Подтверждаете заказ?",
+                "content": f"Хорошо, продолжаем с текущим заказом.\n\n{summary}\n\n✅ Пожалуйста, подтвердите заказ.",
                 "timestamp": state["updated_at"]
             })
             state["next_step"] = "end"
@@ -119,7 +119,7 @@ def router_node(state: ConversationState) -> ConversationState:
             # Unclear response, ask again
             state["messages"].append({
                 "role": "assistant",
-                "content": "Пожалуйста, уточните: отменить заказ? (Да/Нет)",
+                "content": "Пожалуйста, уточните: Вы хотите отменить заказ? (Да/Нет)",
                 "timestamp": state["updated_at"]
             })
             state["next_step"] = "end"
@@ -193,7 +193,7 @@ def router_node(state: ConversationState) -> ConversationState:
                 else:
                     state["messages"].append({
                         "role": "assistant",
-                        "content": "У вас нет активных заказов. Хотите оформить новый?",
+                        "content": "У Вас нет активных заказов. Хотите оформить новый?",
                         "timestamp": state["updated_at"]
                     })
                 state["next_step"] = "end"
@@ -217,7 +217,7 @@ def router_node(state: ConversationState) -> ConversationState:
                         minutes_left = ORDER_EDIT_WINDOW_HOURS * 60 - int(time_since.total_seconds() / 60)
                         state["messages"].append({
                             "role": "assistant",
-                            "content": f"Ваш подтвержденный заказ (можно изменить ещё {minutes_left} мин):\n\n{summary}\n\nЧто хотите изменить?",
+                            "content": f"Ваш подтверждённый заказ (можно изменить ещё {minutes_left} мин):\n\n{summary}\n\nЧто Вы хотели бы изменить?",
                             "timestamp": state["updated_at"]
                         })
                         state["conversation_stage"] = "confirming"
@@ -227,7 +227,7 @@ def router_node(state: ConversationState) -> ConversationState:
                         # Edit window expired
                         state["messages"].append({
                             "role": "assistant",
-                            "content": f"К сожалению, время редактирования заказа истекло ({ORDER_EDIT_WINDOW_HOURS} ч после подтверждения). Для изменений свяжитесь с менеджером.\n\nМогу помочь с новым заказом?",
+                            "content": f"К сожалению, время редактирования заказа истекло ({ORDER_EDIT_WINDOW_HOURS} ч после подтверждения). Для изменений, пожалуйста, свяжитесь с менеджером.\n\nМогу помочь Вам с новым заказом?",
                             "timestamp": state["updated_at"]
                         })
                         state["conversation_stage"] = "inquiry"
@@ -244,11 +244,11 @@ def router_node(state: ConversationState) -> ConversationState:
                 edit_note = ""
                 if validated_order and time_since and time_since <= timedelta(hours=ORDER_EDIT_WINDOW_HOURS):
                     minutes_left = ORDER_EDIT_WINDOW_HOURS * 60 - int(time_since.total_seconds() / 60)
-                    edit_note = f"\n\n💡 Кстати, ваш недавний заказ #{validated_order.id} ещё можно изменить ({minutes_left} мин). Напишите «изменить заказ» если нужно."
+                    edit_note = f"\n\n💡 Кстати, Ваш недавний заказ #{validated_order.id} ещё можно изменить ({minutes_left} мин). Напишите «изменить заказ», если нужно."
 
                 state["messages"].append({
                     "role": "assistant",
-                    "content": f"Привет! 👋 Чем могу помочь?{edit_note}",
+                    "content": f"Здравствуйте! 👋 Чем могу Вам помочь?{edit_note}",
                     "timestamp": state["updated_at"]
                 })
                 state["conversation_stage"] = "inquiry"
@@ -296,13 +296,13 @@ def router_node(state: ConversationState) -> ConversationState:
         if stage == "confirming" and has_active_order:
             from app.agents.tools.order_tools import format_order_summary
             summary = format_order_summary(order_draft)
-            response_text = f"""Привет! 👋
+            response_text = f"""Здравствуйте! 👋
 
-У вас есть незавершенный заказ:
+У Вас есть незавершённый заказ:
 
 {summary}
 
-Подтверждаете? Напишите "Да" или "Заново" если хотите начать сначала."""
+Подтверждаете? Напишите «Да» или «Заново», если хотите начать сначала."""
             state["messages"].append({
                 "role": "assistant",
                 "content": response_text,
@@ -327,7 +327,7 @@ def router_node(state: ConversationState) -> ConversationState:
 
     # Handle post-completion edits (conversation was reopened)
     # Check for edit-related keywords
-    edit_keywords = [r"\bизмен", r"\bпоменя", r"\bдруг", r"\bредактир", r"\bисправ", r"\bможно"]
+    edit_keywords = [r"\bизмен", r"\bпоменя", r"\bредактир", r"\bисправ"]
     if any(re.search(keyword, user_message.lower()) for keyword in edit_keywords):
         # Check if we have an existing order to edit
         order_draft = state.get("order_draft", {})
@@ -339,7 +339,7 @@ def router_node(state: ConversationState) -> ConversationState:
 
 {summary}
 
-Что именно хотите изменить? Укажите новые детали."""
+Что именно Вы хотели бы изменить? Пожалуйста, укажите новые детали."""
 
             state["messages"].append({
                 "role": "assistant",

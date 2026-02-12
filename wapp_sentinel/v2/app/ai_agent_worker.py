@@ -122,7 +122,7 @@ def load_conversation_state(db: Session, conversation: Conversation) -> Conversa
     ).order_by(ConversationMessage.timestamp.asc()).all()
     
     # Load existing order draft from AIGeneratedOrder if exists
-    order_draft = {
+    order_draft = { 
         "items": [],
         "completeness": {"items": False, "pickup": False, "customer": False, "payment": False}
     }
@@ -144,10 +144,26 @@ def load_conversation_state(db: Session, conversation: Conversation) -> Conversa
         if ai_order.estimated_delivery_datetime:
             order_draft["pickup_date"] = ai_order.estimated_delivery_datetime.strftime("%d.%m.%Y")
             order_draft["pickup_time"] = ai_order.estimated_delivery_datetime.strftime("%H:%M")
+        
+        # Restore partial pickup data from notes metadata if datetime not set
+        notes_text = ai_order.notes or ""
+        special_requests_text = notes_text
+        if "__pickup__:" in notes_text:
+            parts = notes_text.split("__pickup__:")
+            special_requests_text = parts[0].strip()
+            try:
+                pickup_meta = json.loads(parts[1].strip())
+                if not order_draft["pickup_date"] and pickup_meta.get("pickup_date"):
+                    order_draft["pickup_date"] = pickup_meta["pickup_date"]
+                if not order_draft["pickup_time"] and pickup_meta.get("pickup_time"):
+                    order_draft["pickup_time"] = pickup_meta["pickup_time"]
+            except (json.JSONDecodeError, IndexError):
+                pass
+        
         order_draft["customer_name"] = ai_order.client_name
         order_draft["customer_phone"] = ai_order.client_phone
         order_draft["payment_method"] = ai_order.payment_status
-        order_draft["special_requests"] = ai_order.notes
+        order_draft["special_requests"] = special_requests_text if special_requests_text else None
         
         # Recalculate total (price is already total: price_per_kg * quantity)
         total = sum(item.get("price", 0) for item in order_draft["items"])
@@ -246,13 +262,27 @@ def save_conversation_state(db: Session, conversation: Conversation, state: Conv
         ai_order.notes = order_draft.get("special_requests")
         logger.info(f"[SAVE] Updated ai_order with {len(order_draft.get('items', []))} items")
         
-        # Parse pickup date/time if available
+        # Save pickup date/time as structured metadata so we don't lose partial data
+        pickup_meta = {}
+        if order_draft.get("pickup_date"):
+            pickup_meta["pickup_date"] = order_draft["pickup_date"]
+        if order_draft.get("pickup_time"):
+            pickup_meta["pickup_time"] = order_draft["pickup_time"]
+        if pickup_meta:
+            # Store in notes as JSON alongside any special_requests
+            existing_notes = ai_order.notes or ""
+            # Strip old pickup metadata if present
+            if "__pickup__:" in existing_notes:
+                existing_notes = existing_notes.split("__pickup__:")[0].strip()
+            special_req = order_draft.get("special_requests") or existing_notes
+            ai_order.notes = f"{special_req}\n__pickup__:{json.dumps(pickup_meta)}" if special_req else f"__pickup__:{json.dumps(pickup_meta)}"
+
+        # Parse pickup date/time into estimated_delivery_datetime if both available
         if order_draft.get("pickup_date") and order_draft.get("pickup_time"):
             try:
                 from datetime import datetime as dt
                 date_str = order_draft["pickup_date"]
                 time_str = order_draft["pickup_time"]
-                # Parse date (DD.MM.YYYY or similar)
                 for fmt in ["%d.%m.%Y", "%d.%m.%y"]:
                     try:
                         pickup_dt = dt.strptime(f"{date_str} {time_str}", f"{fmt} %H:%M")
