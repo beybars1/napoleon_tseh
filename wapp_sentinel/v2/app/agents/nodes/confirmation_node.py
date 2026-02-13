@@ -456,7 +456,6 @@ def confirmation_node(state: ConversationState) -> ConversationState:
             
         else:
             # Unclear — check if it's a language switch request
-            import re
             lang_switch = re.search(r'(казахск|қазақша|казакша|на казахском|на русском|по-русски|орысша)', user_message, re.IGNORECASE)
             
             summary = format_order_summary(order_draft)
