@@ -22,7 +22,7 @@ def acknowledgment_node(state: ConversationState) -> ConversationState:
     import re
     reset_patterns = [r"\bсброс\b", r"\bзаново\b", r"\bотмена\b", r"\bотменить\b", r"\bс\s*нуля\b"]
     if any(re.search(pattern, user_message) for pattern in reset_patterns):
-        response_text = "Хорошо, заказ отменен. Начнем заново! 😊\n\nКакой торт вас интересует?"
+        response_text = "Хорошо, заказ отменён. Начнём заново! 😊\n\nКакой торт Вас интересует?"
         state["conversation_stage"] = "inquiry"
         state["clarification_count"] = 0
         state["order_draft"] = {
@@ -43,25 +43,25 @@ def acknowledgment_node(state: ConversationState) -> ConversationState:
     # If this is mid-conversation greeting, be friendly but continue
     if last_intent == "greeting":
         if conversation_stage == "ordering":
-            response_text = "Привет! 👋 Продолжим оформление заказа?"
+            response_text = "Здравствуйте! 👋 Продолжим оформление Вашего заказа?"
         elif conversation_stage == "confirming":
             response_text = "Здравствуйте! 👋 Подтверждаете заказ?"
         else:
-            response_text = "Привет! 👋 Чем могу помочь?"
+            response_text = "Здравствуйте! 👋 Чем могу Вам помочь?"
     # Generate contextual response based on what's missing
     elif conversation_stage == "ordering":
         if not completeness.get("items"):
-            response_text = "Какой торт и сколько кг вам нужно?"
+            response_text = "Какой торт и сколько кг Вам нужно?"
         elif not completeness.get("pickup"):
-            response_text = "На какую дату и время нужен торт?"
+            response_text = "На какую дату и время Вам нужен торт?"
         elif not completeness.get("customer"):
-            response_text = "Укажите ваше имя и телефон."
+            response_text = "Пожалуйста, укажите Ваше имя и телефон."
         elif not completeness.get("payment"):
-            response_text = "Способ оплаты: предоплата 100% или наличные при получении?"
+            response_text = "Какой способ оплаты Вам удобен: предоплата 100% или наличные при получении?"
         else:
-            response_text = "Уточните детали заказа."
+            response_text = "Пожалуйста, уточните детали Вашего заказа."
     else:
-        response_text = "Чем ещё могу помочь? 😊"
+        response_text = "Чем ещё могу Вам помочь? 😊"
     
     state["messages"].append({
         "role": "assistant",

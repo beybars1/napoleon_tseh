@@ -61,3 +61,99 @@ def calculate_price(product: Product, quantity: float) -> float:
         # Per-kg items - quantity is weight in kg
         return float(product.price_per_kg) * quantity
     return 0.0
+
+
+# Emoji map for product flavors
+_FLAVOR_EMOJI = {
+    "классический": "🍰", "classic": "🍰",
+    "шоколадный": "🍫", "chocolate": "🍫", "шоколадт": "🍫",
+    "клубничный": "🍓", "strawberry": "🍓", "клубникал": "🍓",
+    "кофейный": "☕", "coffee": "☕", "кофе": "☕",
+    "карамельный": "🍬", "caramel": "🍬", "карамел": "🍬",
+    "малиновый": "🫐", "raspberry": "🫐", "малин": "🫐",
+    "фисташковый": "🥜", "pistachio": "🥜", "фисташ": "🥜",
+    "ванильный": "🍦", "vanilla": "🍦", "ваниль": "🍦",
+    "ассорти": "🎨", "mix": "🎨",
+}
+
+
+def _get_emoji(name: str) -> str:
+    """Get emoji for a product based on its name"""
+    name_lower = name.lower()
+    for key, emoji in _FLAVOR_EMOJI.items():
+        if key in name_lower:
+            return emoji
+    return "🍰"
+
+
+def _format_price(value) -> str:
+    """Format price without decimals if whole number"""
+    if value is None:
+        return "—"
+    price = int(value) if value == int(value) else value
+    return f"{price}₸"
+
+
+def format_menu_for_user(products: list[Product], lang: str = "ru") -> str:
+    """
+    Format product menu for display to the user in a strict, consistent style.
+    This is THE ONLY function that should be used to show the menu to the user.
+    
+    Args:
+        products: list of Product objects from DB
+        lang: 'ru' or 'kz'
+    
+    Returns:
+        Formatted menu string
+    """
+    cakes = [p for p in products if p.category == "cake"]
+    sets = [p for p in products if p.category == "dessert_set"]
+    
+    if lang == "kz":
+        lines = ["🍰 *Біздің мәзір:*", ""]
+        
+        if cakes:
+            lines.append("*Торттар (кг бойынша):*")
+            for p in cakes:
+                emoji = _get_emoji(p.name)
+                price = _format_price(p.price_per_kg)
+                lines.append(f"  {emoji} {p.name} — {price}/кг")
+            lines.append("")
+        
+        if sets:
+            lines.append("*Жиынтықтар (6 дана):*")
+            for p in sets:
+                emoji = _get_emoji(p.name)
+                price = _format_price(p.fixed_price)
+                lines.append(f"  {emoji} {p.name} — {price}")
+            lines.append("")
+        
+        lines.append("📏 Ең аз салмақ — 1.5 кг")
+        lines.append("⏰ Дайындау уақыты — кемінде 4 сағат")
+        lines.append("")
+        lines.append("Қай торт Сізді қызықтырады? 😊")
+    else:
+        lines = ["🍰 *Наше меню:*", ""]
+        
+        if cakes:
+            lines.append("*Торты (по кг):*")
+            for p in cakes:
+                emoji = _get_emoji(p.name)
+                price = _format_price(p.price_per_kg)
+                lines.append(f"  {emoji} {p.name} — {price}/кг")
+            lines.append("")
+        
+        if sets:
+            lines.append("*Наборы (6 шт):*")
+            for p in sets:
+                emoji = _get_emoji(p.name)
+                price = _format_price(p.fixed_price)
+                lines.append(f"  {emoji} {p.name} — {price}")
+            lines.append("")
+        
+        lines.append("📏 Минимальный вес — 1.5 кг")
+        lines.append("⏰ Время подготовки — от 4 часов")
+        lines.append("")
+        lines.append("Какой торт Вас интересует? 😊")
+    
+    return "\n".join(lines)

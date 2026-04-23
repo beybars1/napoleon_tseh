@@ -9,7 +9,7 @@ load_dotenv()
 
 
 class OpenAIOrderParser:
-    """Service for parsing order messages using OpenAI GPT-3.5-turbo"""
+    """Service for parsing order messages using OpenAI GPT-4o-mini"""
     
     def __init__(self):
         self.api_key = os.getenv("OPENAI_API_KEY")
@@ -17,7 +17,7 @@ class OpenAIOrderParser:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         
         self.client = OpenAI(api_key=self.api_key)
-        self.model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         
         self.system_prompt = """
 Вы - помощник для парсинга заказов из мессенджера WhatsApp.

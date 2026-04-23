@@ -8,14 +8,15 @@ from openai import OpenAI
 from datetime import datetime
 from langgraph.graph import END
 from app.agents.state import ConversationState
-from app.agents.tools.product_tools import get_product_by_id, search_products, calculate_price, get_all_products, format_product_catalog
+from app.agents.tools.product_tools import get_product_by_id, search_products, calculate_price, get_all_products, format_product_catalog, format_menu_for_user
 from app.agents.tools.order_tools import (
     validate_pickup_date,
     validate_phone,
     check_order_completeness,
     validate_product_availability,
     validate_item_weight,
-    validate_order_size
+    validate_order_size,
+    resolve_natural_date
 )
 from app.database.database import SessionLocal
 
@@ -46,7 +47,7 @@ def order_collector_node(state: ConversationState) -> ConversationState:
         if state.get("conversation_stage") == "confirming":
             state["messages"].append({
                 "role": "assistant",
-                "content": "⚠️ Заказ уже сформирован, подтвердите его или сообщите об изменениях.",
+                "content": "⚠️ Ваш заказ уже сформирован. Пожалуйста, подтвердите его или сообщите, что хотите изменить.",
                 "timestamp": state["updated_at"]
             })
             state["next_step"] = END
@@ -72,6 +73,7 @@ def order_collector_node(state: ConversationState) -> ConversationState:
         product_catalog = format_product_catalog(all_products)
 
         extraction_prompt = f"""Извлеки информацию из сообщения клиента. НЕ ПРИДУМЫВАЙ данные!
+Клиент может писать на русском, казахском или смешанно.
 
 ТЕКУЩЕЕ СООБЩЕНИЕ: "{user_message}"
 {history_context}
@@ -97,7 +99,7 @@ def order_collector_node(state: ConversationState) -> ConversationState:
 КРИТИЧЕСКИ ВАЖНО:
 - Если данных НЕТ в сообщении → null
 - НЕ придумывай данные!
-- Если клиент пишет "выше написал", "уже писал", "смотри выше" → ищи данные в ПРЕДЫДУЩИХ СООБЩЕНИЯХ
+- Если клиент пишет "выше написал", "уже писал", "смотри выше", "жоғарыда жаздым" → ищи данные в ПРЕДЫДУЩИХ СООБЩЕНИЯХ
 - Телефон может быть в формате: 87001234567, +77001234567, 7 700 123 4567
 
 РАСПОЗНАВАНИЕ ИМЕНИ И ТЕЛЕФОНА:
@@ -106,6 +108,28 @@ def order_collector_node(state: ConversationState) -> ConversationState:
 - Имя обычно перед номером телефона
 - Телефон: 10-11 цифр, начинается с 8 или +7 или 7
 
+ДАТА И ВРЕМЯ — ВАЖНО:
+- Сохраняй дату КАК ЕСТЬ из сообщения (включая естественный язык)
+- "завтра" → pickup_date = "завтра"
+- "ертең" → pickup_date = "ертең"
+- "следующий понедельник" → pickup_date = "следующий понедельник"
+- "следующая суббота" → pickup_date = "следующая суббота"
+- "келесі дүйсенбі" → pickup_date = "келесі дүйсенбі"
+- "послезавтра" → pickup_date = "послезавтра"
+- "25.01.2026" → pickup_date = "25.01.2026"
+- "25 января" → pickup_date = "25 января"
+- Дата будет интерпретирована отдельным модулем!
+
+ВРЕМЯ — ПРИНИМАЙ ЛЮБОЕ УКАЗАНИЕ:
+- "15:00" → pickup_time = "15:00"
+- "на вечер" → pickup_time = "вечер"
+- "утром" → pickup_time = "утро"
+- "после обеда" → pickup_time = "после обеда"
+- "кешке" (казахский: вечером) → pickup_time = "кешке"
+- "таңертең" (утром) → pickup_time = "таңертең"
+- "часам к 5" → pickup_time = "17:00"
+- НЕ оставляй pickup_time = null если клиент указал хоть что-то про время!
+
 ПРАВИЛА:
 1. products = [] если товаров нет
 2. ТОРТЫ: quantity_kg = вес, quantity_sets = null
@@ -113,6 +137,9 @@ def order_collector_node(state: ConversationState) -> ConversationState:
 4. Используй ТОЧНОЕ название из каталога!
 
 ПРИМЕРЫ:
+Сообщение: "ертең сағат 14:00-де алып кетемін, Бибарыс 87006458263, алдын ала төлеймін"
+Ответ: {{"products": [], "pickup_date": "ертең", "pickup_time": "14:00", "customer_name": "Бибарыс", "customer_phone": "87006458263", "payment_method": "предоплата", "special_requests": null}}
+
 Сообщение: "25.01.2026, 22 00\\nБибарыс 87006458263\\nПредоплата"
 Ответ: {{"products": [], "pickup_date": "25.01.2026", "pickup_time": "22:00", "customer_name": "Бибарыс", "customer_phone": "87006458263", "payment_method": "предоплата", "special_requests": null}}
 
@@ -141,27 +168,31 @@ def order_collector_node(state: ConversationState) -> ConversationState:
             # Fallback if GPT didn't return JSON
             extracted = {}
         
-        # Flexible date parsing: multiple formats
+        # Detect client language early so all responses match
+        def detect_language(text: str) -> str:
+            """Quick detection: 'kz' if Kazakh chars/words present, else 'ru'"""
+            kz_chars = set('әіңғүұқөһ')
+            kz_words = {'сәлем', 'ертең', 'керек', 'бергім', 'келеді', 'маған', 'жақсы',
+                        'рахмет', 'қанша', 'келесі', 'тапсырыс', 'кешке', 'таңертең',
+                        'мен', 'болады', 'қалай', 'бар', 'жоқ', 'бүгін', 'сенбі', 'осы'}
+            text_lower = text.lower()
+            if any(c in kz_chars for c in text_lower):
+                return 'kz'
+            if any(w in text_lower.split() for w in kz_words):
+                return 'kz'
+            return 'ru'
+
+        lang = detect_language(user_message)
+        
+        # Smart date resolution: handles natural language and structured dates
         if extracted.get("pickup_date"):
-            date_str = extracted["pickup_date"]
-            current_year = datetime.now().year
-            
-            # Try different date formats
-            # Format 1: "23 02 26" or "23 02 2026" (space-separated)
-            if re.match(r'^\d{1,2}\s+\d{1,2}(\s+\d{2,4})?$', date_str):
-                parts = date_str.split()
-                day = parts[0].zfill(2)
-                month = parts[1].zfill(2)
-                year = parts[2] if len(parts) > 2 else str(current_year)
-                if len(year) == 2:
-                    year = "20" + year
-                extracted["pickup_date"] = f"{day}.{month}.{year}"
-            # Format 2: "17.01" or "17.01." (without year)
-            elif re.match(r'^\d{1,2}\.\d{1,2}\.?$', date_str):
-                parts = date_str.rstrip('.').split('.')
-                day = parts[0].zfill(2)
-                month = parts[1].zfill(2)
-                extracted["pickup_date"] = f"{day}.{month}.{current_year}"
+            raw_date = extracted["pickup_date"]
+            raw_time = extracted.get("pickup_time")
+            resolved_date, resolved_time = resolve_natural_date(raw_date, raw_time)
+            if resolved_date:
+                extracted["pickup_date"] = resolved_date
+            if resolved_time and not raw_time:
+                extracted["pickup_time"] = resolved_time
         
         # Update order draft with extracted data
         # Only process products if we have meaningful product data
@@ -285,9 +316,14 @@ def order_collector_node(state: ConversationState) -> ConversationState:
                                 # Format price without decimals
                                 price_display = int(product.price_per_kg) if product.price_per_kg == int(product.price_per_kg) else product.price_per_kg
 
+                                if lang == 'kz':
+                                    weight_msg = f"Тамаша таңдау! {product.name} — {price_display}₸/кг 🍰\n\nСізге қанша кг керек? (кем дегенде 1.5 кг)"
+                                else:
+                                    weight_msg = f"Отличный выбор! {product.name} — {price_display}₸/кг 🍰\n\nСколько кг Вам нужно? (минимум 1.5 кг)"
+
                                 state["messages"].append({
                                     "role": "assistant",
-                                    "content": f"Отлично! {product.name} — {price_display}₸/кг.\n\nСколько кг вам нужно? (минимум 1.5 кг)",
+                                    "content": weight_msg,
                                     "timestamp": state["updated_at"]
                                 })
                                 state["clarification_count"] = state.get("clarification_count", 0) + 1
@@ -405,25 +441,35 @@ def order_collector_node(state: ConversationState) -> ConversationState:
             r"\bсколько[-\s]?(нибудь|то)\b",  # "сколько-нибудь"
             r"\bне\s*знаю\b",  # "не знаю"
             r"\bпосоветуй",  # "посоветуй"
+            r"\bбілмеймін\b",  # "білмеймін" (не знаю)
+            r"\bкеңес\b",  # "кеңес" (совет)
         ]
         
         if any(re.search(pattern, user_message.lower()) for pattern in unclear_patterns):
             # User gave vague response, provide helpful clarification
             if not order_draft["completeness"]["items"]:
-                response_text = """Конечно! Вот наши популярные торты:
-
-🍰 **Классический Наполеон** (8000₸/кг) — традиционный любимчик
-🍫 **Шоколадный Наполеон** (9000₸/кг) — для шоколадных гурманов
-🍓 **Клубничный Наполеон** (9500₸/кг) — с натуральной клубникой
-
-Минимальный вес — 1.5 кг.
-Скажите какой торт и сколько кг вам нужно?"""
+                # Show full menu from DB in strict template format
+                all_prods = get_all_products(db)
+                menu = format_menu_for_user(all_prods, lang=lang)
+                if lang == 'kz':
+                    response_text = f"Қуана көмектесемін!\n\n{menu}"
+                else:
+                    response_text = f"С удовольствием помогу!\n\n{menu}"
             elif not order_draft["completeness"]["pickup"]:
-                response_text = "Укажите конкретную дату и время получения (например: 20.01.2026, 14:00). Минимум 4 часа на подготовку."
+                if lang == 'kz':
+                    response_text = "Алу күні мен уақытын көрсетіңіз (мысалы: «ертең 15:00» немесе «келесі сенбі кешке»). Дайындалу уақыты кемінде 4 сағат."
+                else:
+                    response_text = "Пожалуйста, укажите дату и время получения (например: «завтра в 15:00» или «следующая суббота, вечером»). Минимум 4 часа на подготовку."
             elif not order_draft["completeness"]["customer"]:
-                response_text = "Укажите ваше имя и контактный телефон."
+                if lang == 'kz':
+                    response_text = "Атыңыз бен телефон нөміріңізді жазыңыз."
+                else:
+                    response_text = "Пожалуйста, укажите Ваше имя и контактный телефон."
             else:
-                response_text = "Уточните детали вашего заказа."
+                if lang == 'kz':
+                    response_text = "Тапсырысыңыздың мәліметтерін нақтылаңыз."
+                else:
+                    response_text = "Пожалуйста, уточните детали Вашего заказа."
             
             state["messages"].append({
                 "role": "assistant",
@@ -459,35 +505,52 @@ def order_collector_node(state: ConversationState) -> ConversationState:
                     items_list.append(f"{item['name']} ({item['quantity']} кг)")
             items_str = ", ".join(items_list)
             total_price = sum(item.get("price", 0) for item in order_draft["items"])
-            confirmation_parts.append(f"🍰 Заказ: {items_str}")
+            confirmation_parts.append(f"🍰 {'Тапсырыс' if lang == 'kz' else 'Заказ'}: {items_str}")
             if total_price > 0:
-                confirmation_parts.append(f"💰 Сумма: {total_price:.0f}₸")
+                confirmation_parts.append(f"💰 {'Сомасы' if lang == 'kz' else 'Сумма'}: {total_price:.0f}₸")
 
         # Build list of missing fields
         missing = []
         if not order_draft["completeness"]["items"]:
-            missing.append("• Какой торт и сколько кг?")
+            if lang == 'kz':
+                missing.append("• Қай торт және қанша кг керек?")
+            else:
+                missing.append("• Какой торт и сколько кг Вам нужно?")
         if not order_draft["completeness"]["pickup"]:
-            missing.append("• На какую дату и время?")
+            if lang == 'kz':
+                missing.append("• Қай күні және сағат нешеде? («ертең», «келесі сенбі» деп жазуға болады)")
+            else:
+                missing.append("• На какую дату и время? (можно написать «завтра», «послезавтра» и т.д.)")
         if not order_draft["completeness"]["customer"]:
-            missing.append("• Ваше имя и телефон?")
+            if lang == 'kz':
+                missing.append("• Атыңыз бен телефон нөміріңіз?")
+            else:
+                missing.append("• Ваше имя и телефон?")
         if not order_draft["completeness"]["payment"]:
-            missing.append("• Способ оплаты? (предоплата/наличные при получении)")
+            if lang == 'kz':
+                missing.append("• Төлем тәсілі? (алдын ала төлем / қолма-қол)")
+            else:
+                missing.append("• Способ оплаты? (предоплата / наличные при получении)")
 
         if missing:
             # Still missing some fields
+            ask_more = "\nТағы нақтылаңыз:" if lang == 'kz' else "\nПожалуйста, уточните ещё:"
+            ask_only = "Нақтылаңыз:" if lang == 'kz' else "Пожалуйста, уточните:"
             if confirmation_parts:
                 response_parts.append("\n".join(confirmation_parts))
-                response_parts.append("\nУточните ещё:\n" + "\n".join(missing))
+                response_parts.append(f"{ask_more}\n" + "\n".join(missing))
             else:
-                response_parts.append("Уточните:\n" + "\n".join(missing))
+                response_parts.append(f"{ask_only}\n" + "\n".join(missing))
             state["conversation_stage"] = "ordering"
         else:
             # Order complete, move to confirmation
             from app.agents.tools.order_tools import format_order_summary
             summary = format_order_summary(order_draft)
             response_parts.append(summary)
-            response_parts.append("\n✅ Все верно? Подтвердите заказ.")
+            if lang == 'kz':
+                response_parts.append("\n✅ Бәрі дұрыс па? Тапсырысты растаңыз.")
+            else:
+                response_parts.append("\n✅ Всё верно? Пожалуйста, подтвердите заказ.")
             state["conversation_stage"] = "confirming"
 
         response_text = "\n\n".join(response_parts)

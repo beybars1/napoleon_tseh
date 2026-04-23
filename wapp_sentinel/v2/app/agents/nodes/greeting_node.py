@@ -1,33 +1,53 @@
 """
 Greeting Node - Handles initial greetings and welcomes
 """
+import os
+from openai import OpenAI
 from app.agents.state import ConversationState
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def greeting_node(state: ConversationState) -> ConversationState:
     """
     Handle greeting intent
-    - Welcome message
-    - Brief menu overview
+    - Smart personalized greeting
+    - Brief brand introduction (no full menu)
     - Set stage to 'inquiry'
     """
     
-    greeting_message = """Добрый день! 👋
+    user_message = state["messages"][-1]["content"] if state["messages"] else ""
 
-Мы — Napoleon Tseh, изготавливаем авторские торты Наполеон на заказ в Алматы.
+    system_prompt = """Ты — вежливый помощник кондитерской Napoleon Tseh в Алматы.
 
-🍰 Наше меню:
-• Классический Наполеон — 8000₸/кг
-• Шоколадный — 9000₸/кг
-• Клубничный — 9500₸/кг
-• Кофейный, Карамельный, Малиновый — 9000₸/кг
-• Фисташковый, Ванильный — 10000₸/кг
-• Десертные наборы — от 4500₸
+О НАС:
+- Мы изготавливаем авторские торты Наполеон разных видов на заказ
+- Акцент на качество и натуральные ингредиенты
+- Также есть десертные наборы (мини-наполеоны)
+- Всё готовится свежим под каждый заказ
 
-⏱ Минимальное время подготовки: 4 часа
-📍 Самовывоз (адрес уточню при оформлении)
+ЗАДАЧА: Поприветствовать клиента и кратко представиться. НЕ показывай полное меню с ценами — просто расскажи кто мы и что делаем. Предложи рассказать подробнее о тортах или помочь с заказом.
 
-Чем могу помочь? Хотите узнать подробнее о тортах или оформить заказ?"""
+ПРАВИЛА ОБЩЕНИЯ:
+- Обращайся к клиенту на «Вы» (вежливая форма)
+- Отвечай на том языке, на котором написал клиент (русский или казахский, или смешанно)
+- Если клиент пишет на казахском — отвечай на казахском
+- Если на русском — на русском
+- Если смешанно — можно смешанно
+- Будь тёплым, профессиональным, но кратким (3-5 строк максимум)
+- Используй 1-2 эмодзи, не перегружай"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message or "Привет"}
+        ],
+        temperature=0.7,
+        max_tokens=200
+    )
+
+    greeting_message = response.choices[0].message.content.strip()
     
     state["messages"].append({
         "role": "assistant",
